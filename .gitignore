@@ -28,8 +28,6 @@ android/
 .env.*
 !.env.example
 .envrc
-.codex/
-.mcp.json
 
 # Logs and caches
 *.log

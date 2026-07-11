@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "linear-tooled-voice": {
+      "type": "http",
+      "url": "https://mcp.linear.app/mcp"
+    },
+    "supabase-tooled-voice": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=${SUPABASE_PROJECT_REF_TOOLED_VOICE}",
+      "headers": {
+        "Authorization": "Bearer ${SUPABASE_ACCESS_TOKEN}"
+      }
+    }
+  }
+}
