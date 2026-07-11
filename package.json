@@ -1,0 +1,15 @@
+{
+  "name": "tooled-voice",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "android": "turbo run android --filter=@tooled-voice/mobile",
+    "ios": "turbo run ios --filter=@tooled-voice/mobile",
+    "web": "turbo run web --filter=@tooled-voice/mobile"
+  },
+  "devDependencies": {
+    "turbo": "^2.10.4"
+  }
+}
