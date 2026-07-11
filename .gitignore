@@ -27,7 +27,6 @@ android/
 .env
 .env.*
 !.env.example
-.envrc
 
 # Logs and caches
 *.log
