@@ -15,7 +15,7 @@ export function createApp(database=createDatabase()) {
   const app=new Hono<{Variables:Variables}>();
   const linear=new LinearService(database);
   const integrations={linear};
-  app.get('/auth/confirmed',c=>c.html('<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Account confirmed</title><body style="background:#11130e;color:#f0f1e8;font:16px system-ui;margin:0;display:grid;min-height:100vh;place-items:center"><main style="padding:32px;max-width:520px"><p style="color:#e8ff58;font-weight:800;letter-spacing:.16em">TOOLED / VOICE</p><h1>Account confirmed.</h1><p>You can return to the Tooled Voice app and sign in.</p></main></body></html>'));
+  app.get('/auth/confirmed',c=>c.html('<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.png"><title>Account confirmed</title><body style="background:#11130e;color:#f0f1e8;font:16px system-ui;margin:0;display:grid;min-height:100vh;place-items:center"><main style="padding:32px;max-width:520px"><img src="/icon.png" width="96" height="96" alt="Tooled Voice" style="border-radius:22px"><p style="color:#e8ff58;font-weight:800;letter-spacing:.16em">TOOLED / VOICE</p><h1>Account confirmed.</h1><p>You can return to the Tooled Voice app and sign in.</p></main></body></html>'));
   app.get('/oauth/linear/callback',async c=>{
     const redirect=new URL(linearMobileRedirectUri());
     const providerError=c.req.query('error');
