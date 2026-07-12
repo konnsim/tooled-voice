@@ -21,8 +21,9 @@ export class LinearApi {
   async createIssue(accessToken:string,input:CreateLinearIssueInput,signal:AbortSignal):Promise<CreatedLinearIssue>{
     const teams=teamsSchema.parse(await this.graphql(accessToken,'query VoiceAssistantTeams { teams { nodes { id key name } } }',{},signal)).teams.nodes;
     const normalized=input.team?.trim().toLocaleLowerCase();
-    const matches=normalized?teams.filter(team=>[team.id,team.key,team.name].some(value=>value.toLocaleLowerCase()===normalized)):teams;
-    if(matches.length!==1)throw new ApiError('INVALID_TOOL_ARGUMENTS',normalized?'The specified Linear team was not found or was ambiguous':'A Linear team is required when the account has access to multiple teams',400,false);
+    if(teams.length===0)throw new ApiError('INTEGRATION_UNAVAILABLE','The connected Linear account has no accessible teams',409,false);
+    const matches=normalized?teams.filter(team=>[team.id,team.key,team.name].some(value=>value.toLocaleLowerCase()===normalized)):[teams[0]!];
+    if(matches.length!==1)throw new ApiError('INVALID_TOOL_ARGUMENTS','The specified Linear team was not found or was ambiguous',400,false);
     const team=matches[0]!;
     const data=issueCreateSchema.parse(await this.graphql(accessToken,'mutation VoiceAssistantIssueCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier title url team { name } } } }',{input:{title:input.title,teamId:team.id,...(input.description?{description:input.description}:{})}},signal));
     if(!data.issueCreate.success||!data.issueCreate.issue)throw new ApiError('PROVIDER_UNAVAILABLE','Linear did not create the issue',502,false);

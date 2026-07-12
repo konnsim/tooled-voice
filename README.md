@@ -80,7 +80,7 @@ LINEAR_MOBILE_REDIRECT_URI=tooledvoice://integrations/linear
 
 Do not put the Linear client secret or provider tokens in the mobile environment. In the app, use the Linear Connect control to authorize the account. The backend stores one-time PKCE state in Postgres, exchanges the code, encrypts access and refresh tokens with AES-256-GCM, refreshes expiring credentials, and returns to the app through `tooledvoice://integrations/linear`.
 
-Once connected, ask the assistant to create a Linear issue. If the account can access multiple teams, include the team name or key in the request.
+Once connected, ask the assistant to create a Linear issue. The backend defaults to the first team returned for the connected account, so users do not need to know a team name. A spoken team name or key remains available as an explicit override.
 
 ## Database and API
 
