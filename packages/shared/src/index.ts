@@ -24,6 +24,7 @@ export const conversationItemInputSchema=z.object({
   transcript:z.string().max(20_000).optional(), callId:z.string().max(200).optional(), payload:z.unknown().optional(), completed:z.boolean().default(true),
 });
 export type ConversationItemInput=z.infer<typeof conversationItemInputSchema>;
+export const conversationStatusInputSchema=z.object({status:z.enum(['completed','failed'])});
 
 export const connectionStates = ['idle','authenticating','connecting','connected','listening','thinking','speaking','reconnecting','error','disconnected'] as const;
 export type ConnectionState = (typeof connectionStates)[number];

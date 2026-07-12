@@ -37,7 +37,7 @@ Set `DATABASE_URL`, `SUPABASE_URL`, `OPENAI_API_KEY`, and the token-encryption v
 openssl rand -base64 32
 ```
 
-Use the Supabase transaction-pooler connection string for `DATABASE_URL`. Stored integration credentials record their encryption-key version; keep old versioned keys available until a deliberate rotation path has been implemented.
+Use the Supabase transaction-pooler connection string for `DATABASE_URL`. Stored integration credentials record their encryption-key version. When rotating, move prior base64 keys into the server-only `TOKEN_ENCRYPTION_PREVIOUS_KEYS` JSON object (for example `{"v1":"..."}`), set the new `TOKEN_ENCRYPTION_KEY` and version, and retain old entries until all rows have been re-encrypted.
 
 Create the public mobile environment file:
 
@@ -62,9 +62,29 @@ In Supabase Authentication URL Configuration:
 
 Signup passes the mobile callback explicitly. The app exchanges the returned PKCE code for a session, so open confirmation emails on the device running the development build.
 
+## Linear integration
+
+Create a Linear OAuth application in Linear's API settings with `read` and `write` access. The redirect URI must exactly match the environment in which the API is running:
+
+- Local Android emulator with ADB reverse: `http://localhost:3000/oauth/linear/callback`
+- Production: `https://tooled-voice-api.vercel.app/oauth/linear/callback`
+
+Set these server-only values in `apps/api/.env` locally and in Vercel for production:
+
+```sh
+LINEAR_CLIENT_ID=
+LINEAR_CLIENT_SECRET=
+LINEAR_REDIRECT_URI=http://localhost:3000/oauth/linear/callback
+LINEAR_MOBILE_REDIRECT_URI=tooledvoice://integrations/linear
+```
+
+Do not put the Linear client secret or provider tokens in the mobile environment. In the app, use the Linear Connect control to authorize the account. The backend stores one-time PKCE state in Postgres, exchanges the code, encrypts access and refresh tokens with AES-256-GCM, refreshes expiring credentials, and returns to the app through `tooledvoice://integrations/linear`.
+
+Once connected, ask the assistant to create a Linear issue. If the account can access multiple teams, include the team name or key in the request.
+
 ## Database and API
 
-Apply the checked-in migrations from `apps/api`:
+Apply the checked-in migrations from `apps/api` to a database managed by the repository's Drizzle migration journal:
 
 ```sh
 cd apps/api
@@ -82,6 +102,8 @@ The server listens on `http://localhost:3000`; `GET /api/health` is public. Conv
 ## Native development
 
 `react-native-webrtc` requires a native development build and does not work in Expo Go.
+
+Expo Doctor excludes `react-native-webrtc` from its React Native Directory metadata check. The directory currently marks the package as untested on the New Architecture, while this repository's Android development build and Realtime WebRTC audio/data-channel path are exercised directly. Keep that runtime check in the release checklist when upgrading Expo, React Native, or `react-native-webrtc`.
 
 Build, install, and run Android or iOS from the repository root:
 
@@ -117,6 +139,7 @@ Sign in or create an account, confirm the email on the device, tap Connect, allo
 ```sh
 pnpm check
 pnpm test
+cd apps/mobile && pnpm dlx expo-doctor@latest
 ```
 
 Live verification additionally requires configured Supabase/OpenAI services and a native device or emulator with microphone and audio support. The Vercel Hobby deployment is suitable for this personal proof of concept; review duration, logging, and concurrency limits before commercial use.

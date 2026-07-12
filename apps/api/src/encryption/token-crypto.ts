@@ -7,9 +7,18 @@ export function createEnvironmentKeyring(): Keyring {
   const version = process.env.TOKEN_ENCRYPTION_KEY_VERSION ?? 'v1';
   const encoded = process.env.TOKEN_ENCRYPTION_KEY;
   if (!encoded) throw new Error('TOKEN_ENCRYPTION_KEY is required');
-  const key = Buffer.from(encoded, 'base64');
-  if (key.length !== 32) throw new Error('TOKEN_ENCRYPTION_KEY must decode to 32 bytes');
-  return { current: () => ({ version, key }), get: candidate => candidate === version ? key : undefined };
+  return createKeyring(version,encoded,process.env.TOKEN_ENCRYPTION_PREVIOUS_KEYS);
+}
+export function createKeyring(currentVersion:string,currentEncoded:string,previousJson?:string):Keyring{
+  const previous=previousJson?z.record(z.string(),z.string()).parse(JSON.parse(previousJson)):{};
+  const encodedKeys={...previous,[currentVersion]:currentEncoded};
+  const keys=new Map(Object.entries(encodedKeys).map(([version,encoded])=>{
+    const key=Buffer.from(encoded,'base64');
+    if(key.length!==32)throw new Error(`Encryption key ${version} must decode to 32 bytes`);
+    return[version,key] as const;
+  }));
+  const current=keys.get(currentVersion)!;
+  return{current:()=>({version:currentVersion,key:current}),get:version=>keys.get(version)};
 }
 export function encryptToken(plaintext: string, keyring: Keyring): EncryptedValue {
   const { version, key } = keyring.current(); const iv = randomBytes(12); const cipher = createCipheriv('aes-256-gcm', key, iv);

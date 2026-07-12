@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "vercel-build": "pnpm --filter @tooled-voice/shared build",
+    "predev": "pnpm --filter @tooled-voice/shared build",
     "dev": "node --env-file=.env --watch --import tsx src/dev.ts",
     "check": "tsc --noEmit",
     "test": "vitest run",

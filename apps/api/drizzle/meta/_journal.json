@@ -29,6 +29,13 @@
       "when": 1783772436565,
       "tag": "0003_link_profiles_to_supabase_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783847387403,
+      "tag": "0004_youthful_young_avengers",
+      "breakpoints": true
     }
   ]
 }
