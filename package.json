@@ -4,7 +4,11 @@
   "private": true,
   "packageManager": "pnpm@10.33.0",
   "scripts": {
+    "check": "turbo run check",
+    "test": "turbo run test",
     "dev": "turbo run dev",
+    "dev:api": "pnpm --filter @tooled-voice/api dev",
+    "dev:native": "turbo run dev:native --filter=@tooled-voice/mobile",
     "android": "turbo run android --filter=@tooled-voice/mobile",
     "ios": "turbo run ios --filter=@tooled-voice/mobile",
     "web": "turbo run web --filter=@tooled-voice/mobile"

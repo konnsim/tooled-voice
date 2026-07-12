@@ -1,13 +1,15 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Tooled Voice",
+    "slug": "tooled-voice",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": { "NSMicrophoneUsageDescription": "Tooled Voice uses the microphone while you hold the talk button." },
+      "bundleIdentifier": "com.tooledvoice.mobile"
     },
     "android": {
       "adaptiveIcon": {
@@ -16,10 +18,14 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["RECORD_AUDIO"],
+      "package": "com.tooledvoice.mobile"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [["expo-secure-store", {"configureAndroidBackup": true}]],
+    "scheme": "tooledvoice"
   }
 }

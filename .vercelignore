@@ -1,0 +1,11 @@
+.git/
+.turbo/
+.vercel/
+node_modules/
+apps/mobile/
+apps/api/node_modules/
+apps/api/.env*
+apps/api/.turbo/
+apps/api/.vercel/
+**/*.log
+**/*.tsbuildinfo

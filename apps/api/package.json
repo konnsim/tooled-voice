@@ -1,0 +1,33 @@
+{
+  "name": "@tooled-voice/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "vercel-build": "pnpm --filter @tooled-voice/shared build",
+    "dev": "node --env-file=.env --watch --import tsx src/dev.ts",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.8",
+    "@hono/zod-validator": "^0.8.0",
+    "@supabase/supabase-js": "^2.110.2",
+    "@tooled-voice/shared": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "hono": "^4.12.29",
+    "jose": "^6.2.3",
+    "postgres": "^3.4.9",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.23.0",
+    "typescript": "~6.0.3",
+    "vercel": "^55.0.0",
+    "vitest": "^4.1.10"
+  }
+}

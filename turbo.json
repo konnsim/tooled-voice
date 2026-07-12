@@ -2,7 +2,13 @@
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
   "tasks": {
+    "check": { "dependsOn": ["^check"], "outputs": [] },
+    "test": { "dependsOn": ["^check"], "outputs": ["coverage/**"] },
     "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "dev:native": {
       "cache": false,
       "persistent": true
     },

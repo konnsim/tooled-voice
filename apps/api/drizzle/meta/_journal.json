@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1783771734595,
+      "tag": "0000_pretty_cyclops",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783772354244,
+      "tag": "0001_enable_default_deny_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783772414482,
+      "tag": "0002_legal_nekra",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783772436565,
+      "tag": "0003_link_profiles_to_supabase_auth",
+      "breakpoints": true
+    }
+  ]
+}

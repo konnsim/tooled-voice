@@ -1,0 +1,2 @@
+const required=(name:'EXPO_PUBLIC_SUPABASE_URL'|'EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'|'EXPO_PUBLIC_API_URL')=>{const value=process.env[name];if(!value)throw new Error(`${name} is required`);return value.replace(name==='EXPO_PUBLIC_API_URL'?/\/$/:/$^/,'')};
+export const config={supabaseUrl:required('EXPO_PUBLIC_SUPABASE_URL'),supabaseKey:required('EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY'),apiUrl:required('EXPO_PUBLIC_API_URL')};

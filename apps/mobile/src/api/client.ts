@@ -1,0 +1,9 @@
+import { toolResponseSchema, type ToolCallRequest } from '@tooled-voice/shared';
+import { config } from '../config';
+import { supabase } from '../auth/supabase';
+async function token(){const {data,error}=await supabase.auth.getSession();if(error||!data.session)throw new Error('AUTH_REQUIRED');return data.session.access_token}
+export async function apiFetch(path:string,init:RequestInit={}){const accessToken=await token();const response=await fetch(`${config.apiUrl}${path}`,{...init,headers:{...init.headers,Authorization:`Bearer ${accessToken}`,'Content-Type':'application/json'}});const data=await response.json();if(!response.ok)throw new Error(data?.error?.code ?? `HTTP_${response.status}`);return data}
+export const createRealtimeCredential=(conversationId?:string)=>apiFetch('/api/realtime/session',{method:'POST',body:JSON.stringify(conversationId?{conversationId}:{})}) as Promise<{clientSecret:string;expiresAt?:number;sessionId?:string;model:string;conversationId:string}>;
+export async function executeTool(request:ToolCallRequest){return toolResponseSchema.parse(await apiFetch('/api/tools',{method:'POST',body:JSON.stringify(request)}))}
+export async function persistConversationItem(conversationId:string,item:{role:'user'|'assistant'|'tool';kind:'transcript'|'tool_call'|'tool_result';transcript?:string;callId?:string;payload?:unknown;completed?:boolean}){await apiFetch(`/api/conversations/${conversationId}/items`,{method:'POST',body:JSON.stringify(item)})}
+export async function getLatestConversation(){const data=await apiFetch('/api/conversations') as {conversations:Array<{id:string;status:string;updatedAt:string}>};const latest=data.conversations[0];if(!latest)return null;const history=await apiFetch(`/api/conversations/${latest.id}/items`) as {items:Array<{id:string;role:'user'|'assistant'|'tool';kind:string;transcript:string|null}>};return {id:latest.id,items:history.items}}

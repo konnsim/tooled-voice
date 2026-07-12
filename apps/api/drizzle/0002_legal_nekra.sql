@@ -1,0 +1,1 @@
+CREATE INDEX "tool_execution_conversation_idx" ON "tool_executions" USING btree ("conversation_id");

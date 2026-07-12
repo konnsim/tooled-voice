@@ -1,0 +1,4 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createApp } from './app.js';
+describe('authentication boundary',()=>{it('rejects unauthenticated API requests with a stable error',async()=>{const response=await createApp({} as never).request('/api/tools',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});expect(response.status).toBe(401);expect(await response.json()).toMatchObject({ok:false,error:{code:'AUTH_REQUIRED',retryable:false}})})});
+describe('readiness',()=>{it('checks database connectivity without requiring a token',async()=>{const execute=vi.fn().mockResolvedValue([]);const response=await createApp({execute} as never).request('/api/health');expect(response.status).toBe(200);expect(await response.json()).toEqual({ok:true,database:'connected'});expect(execute).toHaveBeenCalledOnce()})});
