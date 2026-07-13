@@ -8,7 +8,7 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "infoPlist": { "NSMicrophoneUsageDescription": "Tooled Voice uses the microphone while you hold the talk button." },
+      "infoPlist": { "NSMicrophoneUsageDescription": "Tooled Voice uses the microphone during a live voice conversation." },
       "bundleIdentifier": "com.tooledvoice.mobile"
     },
     "android": {
@@ -18,7 +18,7 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "permissions": ["RECORD_AUDIO"],
+      "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS", "BLUETOOTH", "BLUETOOTH_ADMIN", "BLUETOOTH_CONNECT", "WAKE_LOCK"],
       "package": "com.tooledvoice.mobile"
     },
     "web": {

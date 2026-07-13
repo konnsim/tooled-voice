@@ -60,12 +60,14 @@ function AuthScreen({initialMessage}:{initialMessage:string|undefined}){
 function VoiceScreen({email}:{email:string}){
   const voice=useVoiceSession();
   const history=useRef<ScrollView>(null);
+  const[showDiagnostics,setShowDiagnostics]=useState(false);
   const active=['connected','listening','thinking','speaking'].includes(voice.state);
   const pending=['authenticating','connecting','reconnecting'].includes(voice.state);
   const liveLabel=voice.muted?'MUTED':voice.state==='listening'?'LISTENING':voice.state==='speaking'?'SPEAKING':voice.state==='thinking'?'THINKING':'LIVE';
   return <SafeAreaView style={styles.safe}><StatusBar style="light"/>
     <View style={styles.header}><View><Text style={styles.eyebrow}>TOOLED / VOICE</Text><Text style={styles.identity}>{email}</Text></View><Pressable onPress={()=>void supabase.auth.signOut()}><Text style={styles.signout}>SIGN OUT</Text></Pressable></View>
-    <View style={styles.statusRow}><View style={[styles.dot,{backgroundColor:voice.state==='error'?'#ff5d43':active?'#e8ff58':'#77796e'}]}/><Text style={styles.status}>{voice.muted&&active?'MUTED':labels[voice.state]}</Text></View>
+    <View style={styles.statusRow}><View style={[styles.dot,{backgroundColor:voice.state==='error'?'#ff5d43':active?'#e8ff58':'#77796e'}]}/><Text style={styles.status}>{voice.muted&&active?'MUTED':labels[voice.state]}</Text><Pressable onPress={()=>setShowDiagnostics(value=>!value)} style={styles.labButton} accessibilityRole="button" accessibilityLabel="Toggle voice diagnostics"><Text style={styles.labButtonText}>VOICE LAB</Text></Pressable></View>
+    {showDiagnostics?<View style={styles.diagnostics}><View style={styles.diagnosticsHeader}><Text style={styles.diagnosticsTitle}>VOICE LAB / LIVE</Text><Pressable onPress={()=>setShowDiagnostics(false)}><Text style={styles.diagnosticsClose}>CLOSE</Text></Pressable></View><Text style={styles.diagnosticsSummary}>ROUTE {voice.route.toUpperCase()}  ·  VAD {voice.vadEagerness.toUpperCase()}</Text>{voice.diagnostics.slice(0,8).map(item=><View key={item.id} style={styles.diagnosticRow}><Text style={styles.diagnosticEvent}>{item.event.replaceAll('_',' ').toUpperCase()}</Text><Text style={styles.diagnosticValue}>{item.elapsedMs===undefined?'—':`${item.elapsedMs}ms`}{item.detail?`  ${item.detail}`:''}</Text></View>)}</View>:null}
     <LinearIntegrationControl/>
     <ScrollView ref={history} style={styles.history} contentContainerStyle={styles.historyContent} onContentSizeChange={()=>history.current?.scrollToEnd({animated:true})}>
       {voice.history.length===0?<View style={styles.empty}><Text style={styles.emptyIndex}>01</Text><Text style={styles.emptyTitle}>{active?'Live line open.':'Start a live voice.'}{`\n`}{active?'Just start talking.':'Stay in the conversation.'}</Text><Text style={styles.emptyBody}>{active?'Speak naturally, pause when you are done, and interrupt at any time.':'Connect once for a continuous, hands-free conversation with your tools.'}</Text></View>:voice.history.map(item=><View key={item.id} style={[styles.line,item.role==='assistant'&&styles.assistant]}><Text style={styles.role}>{item.role==='user'?'YOU':'VOICE'}</Text><Text style={styles.transcript}>{item.text}</Text></View>)}
@@ -73,7 +75,8 @@ function VoiceScreen({email}:{email:string}){
     {voice.error?<Text style={styles.error}>{voice.error}</Text>:null}
     <View style={styles.controls}>{!active?<Pressable disabled={pending} onPress={()=>void voice.connect()} style={[styles.connect,pending&&styles.primaryDisabled]} accessibilityRole="button" accessibilityLabel="Start live voice"><Text style={styles.connectText}>{pending?'OPENING LIVE LINE…':'START LIVE VOICE'}</Text></Pressable>:<>
       <View style={[styles.liveOrb,voice.state==='speaking'&&styles.liveOrbSpeaking,voice.muted&&styles.liveOrbMuted]} accessibilityLiveRegion="polite"><View style={[styles.liveCore,voice.muted&&styles.liveCoreMuted]}><Text style={[styles.liveText,voice.muted&&styles.liveTextMuted]}>{liveLabel}</Text></View></View>
-      <View style={styles.liveActions}><Pressable onPress={voice.toggleMuted} style={({pressed})=>[styles.liveAction,voice.muted&&styles.liveActionActive,pressed&&styles.pressed]} accessibilityRole="button" accessibilityLabel={voice.muted?'Unmute microphone':'Mute microphone'}><Text style={[styles.liveActionText,voice.muted&&styles.liveActionTextActive]}>{voice.muted?'UNMUTE':'MUTE'}</Text></Pressable><Pressable onPress={voice.disconnect} style={({pressed})=>[styles.liveAction,styles.endAction,pressed&&styles.pressed]} accessibilityRole="button" accessibilityLabel="End live voice session"><Text style={styles.endActionText}>END</Text></Pressable></View>
+      <View style={styles.liveActions}><Pressable onPress={voice.toggleMuted} style={({pressed})=>[styles.liveAction,voice.muted&&styles.liveActionActive,pressed&&styles.pressed]} accessibilityRole="button" accessibilityLabel={voice.muted?'Unmute microphone':'Mute microphone'}><Text style={[styles.liveActionText,voice.muted&&styles.liveActionTextActive]}>{voice.muted?'UNMUTE':'MUTE'}</Text></Pressable><Pressable onPress={voice.toggleSpeaker} style={({pressed})=>[styles.liveAction,voice.speaker&&styles.liveActionActive,pressed&&styles.pressed]} accessibilityRole="button" accessibilityLabel={voice.speaker?'Use earpiece':'Use speaker'}><Text style={[styles.liveActionText,voice.speaker&&styles.liveActionTextActive]}>{voice.speaker?'SPEAKER':'EARPIECE'}</Text></Pressable><Pressable onPress={voice.disconnect} style={({pressed})=>[styles.liveAction,styles.endAction,pressed&&styles.pressed]} accessibilityRole="button" accessibilityLabel="End live voice session"><Text style={styles.endActionText}>END</Text></Pressable></View>
+      <Pressable onPress={voice.toggleVadEagerness} accessibilityRole="button" accessibilityLabel="Toggle voice response speed"><Text style={styles.vadToggle}>TURN SPEED · {voice.vadEagerness==='high'?'FAST':'NATURAL'}</Text></Pressable>
     </>}<Text style={styles.hint}>{active?(voice.muted?'MICROPHONE OFF · TAP UNMUTE TO CONTINUE':'LIVE MIC · SPEAK NATURALLY · INTERRUPT ANY TIME'):'ONE CONNECTION · CONTINUOUS CONVERSATION'}</Text></View>
   </SafeAreaView>
 }
@@ -106,6 +109,16 @@ const styles=StyleSheet.create({
   statusRow:{flexDirection:'row',alignItems:'center',gap:9,marginTop:34},
   dot:{width:8,height:8,borderRadius:4},
   status:{color:ink,fontSize:12,fontWeight:'800',letterSpacing:2},
+  labButton:{marginLeft:'auto',borderWidth:1,borderColor:'#5a5c52',paddingHorizontal:9,paddingVertical:5},
+  labButtonText:{color:muted,fontSize:8,fontWeight:'900',letterSpacing:1.2},
+  diagnostics:{position:'absolute',top:118,left:14,right:14,zIndex:10,backgroundColor:'#191b15',borderWidth:1,borderColor:acid,padding:14,shadowColor:'#000',shadowOpacity:.7,shadowRadius:18,elevation:12},
+  diagnosticsHeader:{flexDirection:'row',justifyContent:'space-between',alignItems:'center'},
+  diagnosticsTitle:{color:acid,fontSize:10,fontWeight:'900',letterSpacing:1.6},
+  diagnosticsClose:{color:muted,fontSize:8,fontWeight:'800',letterSpacing:1.2,padding:5},
+  diagnosticsSummary:{color:ink,fontSize:9,fontWeight:'800',letterSpacing:1,marginTop:9,marginBottom:7},
+  diagnosticRow:{flexDirection:'row',justifyContent:'space-between',gap:8,borderTopWidth:1,borderColor:'#303229',paddingVertical:5},
+  diagnosticEvent:{color:muted,fontSize:8,fontWeight:'700',flex:1},
+  diagnosticValue:{color:ink,fontSize:8,textAlign:'right',flex:1},
   history:{flex:1,marginTop:10},
   historyContent:{flexGrow:1,paddingVertical:24},
   empty:{flex:1,justifyContent:'center',borderTopWidth:1,borderColor:'#303229'},
@@ -126,12 +139,13 @@ const styles=StyleSheet.create({
   liveCoreMuted:{backgroundColor:'#303229'},
   liveText:{color:base,fontSize:12,fontWeight:'900',letterSpacing:1.7},
   liveTextMuted:{color:muted},
-  liveActions:{flexDirection:'row',gap:10,marginTop:14},
-  liveAction:{height:42,minWidth:112,borderWidth:1,borderColor:'#5a5c52',alignItems:'center',justifyContent:'center',paddingHorizontal:20},
+  liveActions:{flexDirection:'row',gap:8,marginTop:14,width:'100%'},
+  liveAction:{height:42,flex:1,borderWidth:1,borderColor:'#5a5c52',alignItems:'center',justifyContent:'center',paddingHorizontal:6},
   liveActionActive:{borderColor:acid},
   liveActionText:{color:ink,fontSize:10,fontWeight:'900',letterSpacing:1.5},
   liveActionTextActive:{color:acid},
   endAction:{borderColor:'#74443c'},
   endActionText:{color:'#ff765f',fontSize:10,fontWeight:'900',letterSpacing:1.5},
+  vadToggle:{color:'#77796e',fontSize:8,fontWeight:'800',letterSpacing:1.1,paddingTop:12},
   hint:{color:'#77796e',fontSize:9,fontWeight:'700',letterSpacing:1.1,marginTop:16},
 });

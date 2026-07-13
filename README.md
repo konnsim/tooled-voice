@@ -4,7 +4,7 @@ Tooled Voice is a native live voice assistant built with Expo development builds
 
 ## Architecture
 
-- `apps/mobile`: Expo/React Native app with Supabase email/password auth, SecureStore-backed sessions, PKCE confirmation deep links, and `react-native-webrtc`.
+- `apps/mobile`: Expo/React Native app with Supabase email/password auth, SecureStore-backed sessions, PKCE confirmation deep links, `react-native-webrtc`, and native in-call audio routing/focus management.
 - `apps/api`: Hono API for Supabase JWT verification, OpenAI Realtime client-secret minting, conversation persistence, encrypted provider credentials, and typed tool dispatch.
 - `packages/shared`: shared Zod contracts and TypeScript types.
 
@@ -101,9 +101,9 @@ The server listens on `http://localhost:3000`; `GET /api/health` is public. Conv
 
 ## Native development
 
-`react-native-webrtc` requires a native development build and does not work in Expo Go.
+`react-native-webrtc` and `react-native-incall-manager` require a native development build and do not work in Expo Go. Live voice starts in hands-free speaker mode, follows wired/Bluetooth route changes, acquires Android audio focus, and exposes a speaker/earpiece control. Android 12 and newer will request Bluetooth-connect permission so an attached headset can participate in the call audio route.
 
-Expo Doctor excludes `react-native-webrtc` from its React Native Directory metadata check. The directory currently marks the package as untested on the New Architecture, while this repository's Android development build and Realtime WebRTC audio/data-channel path are exercised directly. Keep that runtime check in the release checklist when upgrading Expo, React Native, or `react-native-webrtc`.
+Expo Doctor excludes `react-native-webrtc` and `react-native-incall-manager` from its React Native Directory metadata check. The directory currently marks both packages as untested on the New Architecture, while this repository's Android development build exercises the Realtime WebRTC and native call-audio paths directly. Keep that runtime check in the release checklist when upgrading Expo, React Native, or either native package.
 
 Build, install, and run Android or iOS from the repository root:
 
@@ -121,7 +121,9 @@ pnpm dev:native
 
 Rebuild after changing native dependencies, Expo plugins, microphone permissions, identifiers, or the URL scheme. JavaScript-only changes can be picked up by Metro reload.
 
-Sign in or create an account, confirm the email on the device, then tap **Start Live Voice** and allow microphone access. The microphone remains live for a continuous conversation: speak naturally, pause to let semantic turn detection respond, and speak over the assistant to interrupt. Use **Mute** without ending the session, or **End** to close it. Asking “What time is it in Sydney?” exercises the complete `getCurrentTime` tool path.
+Sign in or create an account, confirm the email on the device, then tap **Start Live Voice** and allow microphone access. The microphone remains live for a continuous conversation: speak naturally, pause to let semantic turn detection respond, and speak over the assistant to interrupt. Use **Mute** without ending the session, switch between **Speaker** and **Earpiece**, or **End** to close it. **Turn Speed** switches live between fast (`high`) and natural (`auto`) semantic VAD so both can be compared without reconnecting. Asking “What time is it in Sydney?” exercises the complete `getCurrentTime` tool path.
+
+Tap **Voice Lab** while connected to inspect recent connection, speech, first-audio, interruption, tool, route, and audio-focus events. The same events are emitted as one-line JSON records in the Metro terminal with `scope: "tooled-voice/realtime"`. `first_audio` reports total time from detected speech stop, with model-response time in its detail field.
 
 ## Root scripts
 
@@ -143,3 +145,12 @@ cd apps/mobile && pnpm dlx expo-doctor@latest
 ```
 
 Live verification additionally requires configured Supabase/OpenAI services and a native device or emulator with microphone and audio support. The Vercel Hobby deployment is suitable for this personal proof of concept; review duration, logging, and concurrency limits before commercial use.
+
+For release-quality voice verification, use physical Android and iOS devices and run the same short conversation through:
+
+- Quiet room and background speech/noise.
+- Speaker, earpiece, wired headset, and Bluetooth headset routes.
+- Fast and natural turn-speed modes, including hesitation and self-correction.
+- Speaking over the assistant to confirm immediate interruption.
+- Background/foreground reconnection and an incoming audio-focus interruption.
+- A normal reply and a tool call, comparing `speech_stopped`, `response_created`, `first_audio`, and `tool_finished` timings in Voice Lab.

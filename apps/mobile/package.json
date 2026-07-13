@@ -12,6 +12,7 @@
     "expo-status-bar": "~57.0.0",
     "react": "19.2.3",
     "react-native": "0.86.0",
+    "react-native-incall-manager": "4.2.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-url-polyfill": "^3.0.0",
     "react-native-webrtc": "^124.0.7",
@@ -25,7 +26,8 @@
     "doctor": {
       "reactNativeDirectoryCheck": {
         "exclude": [
-          "react-native-webrtc"
+          "react-native-webrtc",
+          "react-native-incall-manager"
         ]
       }
     }
