@@ -1,11 +1,11 @@
 # Tooled Voice
 
-Tooled Voice is a native live voice assistant built with Expo development builds, OpenAI Realtime over direct WebRTC, Supabase Auth/Postgres, an authenticated Hono backend, and Linear's official hosted MCP server. Audio travels between the device and OpenAI; local tools and application data travel through the API, while connected Linear operations run through its hosted MCP.
+Tooled Voice is a native live voice assistant built with Expo development builds, OpenAI Realtime over direct WebRTC, Supabase Auth/Postgres, an authenticated Hono backend, and user-scoped Composio MCP sessions. Audio travels between the device and OpenAI; local tools and application data travel through the API, while connected third-party operations run through Composio.
 
 ## Architecture
 
 - `apps/mobile`: Expo/React Native app with Supabase email/password auth, SecureStore-backed sessions, PKCE confirmation deep links, `react-native-webrtc`, and native in-call audio routing/focus management.
-- `apps/api`: Hono API for Supabase JWT verification, OpenAI Realtime client-secret minting, conversation persistence, encrypted provider credentials, OAuth refresh, and typed local-tool dispatch.
+- `apps/api`: Hono API for Supabase JWT verification, OpenAI Realtime client-secret minting, Composio session creation, conversation persistence, and typed local-tool dispatch.
 - `packages/shared`: shared Zod contracts and TypeScript types.
 
 The API is deployed at `https://tooled-voice-api.vercel.app`. Its Vercel project uses `apps/api` as the monorepo Root Directory.
@@ -39,6 +39,8 @@ openssl rand -base64 32
 
 Use the Supabase transaction-pooler connection string for `DATABASE_URL`. Stored integration credentials record their encryption-key version. When rotating, move prior base64 keys into the server-only `TOKEN_ENCRYPTION_PREVIOUS_KEYS` JSON object (for example `{"v1":"..."}`), set the new `TOKEN_ENCRYPTION_KEY` and version, and retain old entries until all rows have been re-encrypted.
 
+Set `COMPOSIO_API_KEY` to enable managed connections for Linear, GitHub, Gmail, Slack, and Notion. Composio associates connections with the authenticated Supabase user ID and returns a short-lived, user-scoped MCP session to the API; the Composio API key is never sent to the mobile app or OpenAI.
+
 Create the public mobile environment file:
 
 ```sh
@@ -62,7 +64,11 @@ In Supabase Authentication URL Configuration:
 
 Signup passes the mobile callback explicitly. The app exchanges the returned PKCE code for a session, so open confirmation emails on the device running the development build.
 
-## Linear integration
+## Tool integrations
+
+With `COMPOSIO_API_KEY` configured, the **Connected Tools** card lets each user connect or remove Linear, GitHub, Gmail, Slack, and Notion accounts through Composio managed authentication. Realtime sessions receive one user-scoped Composio MCP endpoint with runtime tool discovery. **Ask me** automatically permits read-like operations and requires explicit approval for changes; **Allow** permits changes without confirmation. Permission changes apply to the next voice session.
+
+### Legacy Linear fallback
 
 Create a Linear OAuth application in Linear's API settings with `read` and `write` access. The redirect URI must exactly match the environment in which the API is running:
 
@@ -80,7 +86,7 @@ LINEAR_MOBILE_REDIRECT_URI=tooledvoice://integrations/linear
 
 Do not put the Linear client secret or provider tokens in the mobile environment. In the app, use the Linear Connect control to authorize the account. The backend stores one-time PKCE state in Postgres, exchanges the code, encrypts access and refresh tokens with AES-256-GCM, refreshes expiring credentials, and returns to the app through `tooledvoice://integrations/linear`.
 
-For each Realtime session, the backend attaches Linear's official hosted MCP at `https://mcp.linear.app/mcp` using the refreshed OAuth access token. The token is sent server-to-server as part of session creation and is never returned to the mobile app. The assistant can use the MCP's complete available Linear tool set for issues, projects, comments, cycles, initiatives, milestones, documents, and related workspace operations. In the Linear connection card, **Ask me** automatically permits reads but requires **Allow** or **Deny** for every change; **Allow** permits changes without confirmation. The selected policy applies when the next voice session starts and defaults to **Ask me**.
+When Composio is not configured, the existing Linear connection remains available as a compatibility fallback. Its OAuth token is refreshed by the API and attached to Linear's official hosted MCP. Keep the Linear environment variables only until the Composio cutover has been verified, then remove the legacy OAuth code and encrypted credentials in a separate migration.
 
 ## Database and API
 

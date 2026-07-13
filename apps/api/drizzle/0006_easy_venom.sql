@@ -1,0 +1,1 @@
+ALTER TABLE "user_profiles" ADD COLUMN "tool_approval_policy" text DEFAULT 'ask' NOT NULL;

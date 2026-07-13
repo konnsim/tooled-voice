@@ -14,3 +14,9 @@ export const getLinearStatus=()=>apiFetch('/api/integrations/linear/status') as 
 export const setLinearApprovalPolicy=(approvalPolicy:'ask'|'automatic')=>apiFetch('/api/integrations/linear/approval-policy',{method:'PUT',body:JSON.stringify({approvalPolicy})}) as Promise<LinearStatus>;
 export const beginLinearConnection=()=>apiFetch('/api/integrations/linear/connect',{method:'POST'}) as Promise<{authorizationUrl:string}>;
 export const disconnectLinear=()=>apiFetch('/api/integrations/linear',{method:'DELETE'}) as Promise<void>;
+export type ToolApprovalPolicy='ask'|'automatic';
+export type ToolConnection={slug:'linear'|'github'|'gmail'|'slack'|'notion';name:string;connected:boolean;logo?:string};
+export const getToolConnections=()=>apiFetch('/api/integrations') as Promise<{configured:boolean;approvalPolicy:ToolApprovalPolicy;connections:ToolConnection[]}>;
+export const beginToolConnection=(toolkit:ToolConnection['slug'])=>apiFetch(`/api/integrations/${toolkit}/connect`,{method:'POST'}) as Promise<{authorizationUrl:string}>;
+export const disconnectTool=(toolkit:ToolConnection['slug'])=>apiFetch(`/api/integrations/${toolkit}`,{method:'DELETE'}) as Promise<void>;
+export const setToolApprovalPolicy=(approvalPolicy:ToolApprovalPolicy)=>apiFetch('/api/integrations/approval-policy',{method:'PUT',body:JSON.stringify({approvalPolicy})}) as Promise<{approvalPolicy:ToolApprovalPolicy}>;

@@ -43,6 +43,13 @@
       "when": 1783910431816,
       "tag": "0005_blushing_luke_cage",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783916531387,
+      "tag": "0006_easy_venom",
+      "breakpoints": true
     }
   ]
 }
