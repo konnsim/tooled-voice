@@ -39,7 +39,7 @@ openssl rand -base64 32
 
 Use the Supabase transaction-pooler connection string for `DATABASE_URL`. Stored integration credentials record their encryption-key version. When rotating, move prior base64 keys into the server-only `TOKEN_ENCRYPTION_PREVIOUS_KEYS` JSON object (for example `{"v1":"..."}`), set the new `TOKEN_ENCRYPTION_KEY` and version, and retain old entries until all rows have been re-encrypted.
 
-Set `COMPOSIO_API_KEY` to enable managed connections for Linear, GitHub, Gmail, Slack, and Notion. Composio associates connections with the authenticated Supabase user ID and returns a short-lived, user-scoped MCP session to the API; the Composio API key is never sent to the mobile app or OpenAI.
+Set `COMPOSIO_API_KEY` to enable managed connections for Linear, GitHub, Gmail, Slack, and Notion. Composio associates connections with the authenticated Supabase user ID and returns a short-lived, user-scoped MCP session to the API. Because OpenAI's hosted MCP tool accepts Bearer authorization while Composio requires `x-api-key`, the API exposes a signed, host-restricted MCP bridge that translates the header without returning the key to the mobile app. `PUBLIC_API_URL` selects the public bridge origin and defaults to production.
 
 Create the public mobile environment file:
 
