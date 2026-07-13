@@ -68,6 +68,8 @@ Signup passes the mobile callback explicitly. The app exchanges the returned PKC
 
 With `COMPOSIO_API_KEY` configured, the **Tools / Connections** launcher opens a searchable Composio directory. Users can connect multiple accounts, pause, enable, or reconnect each account, enable or disable an entire service, choose a per-service mutation policy, and exclude individual actions. These preferences are stored against the Supabase user and applied when creating the next user-scoped Composio MCP session. **Ask me** automatically permits read-like operations and requires explicit approval for changes; **Allow** permits changes without confirmation globally or for an explicitly selected service.
 
+Provider authorization opens in a native browser authentication session and returns through `tooledvoice://integrations/composio`. The manager distinguishes active, pending, cancelled, and failed connection attempts. Because this flow uses the native `expo-web-browser` module, rebuild an existing development build once after adding or updating that dependency.
+
 ### Legacy Linear fallback
 
 Create a Linear OAuth application in Linear's API settings with `read` and `write` access. The redirect URI must exactly match the environment in which the API is running:

@@ -22,7 +22,7 @@ export type ToolSettings=Record<string,ToolSetting>;
 export const getToolConnections=()=>apiFetch('/api/integrations') as Promise<{configured:boolean;approvalPolicy:ToolApprovalPolicy;settings:ToolSettings;connections:ToolConnection[];accounts:ToolAccount[]}>;
 export const searchToolCatalog=(search:string)=>apiFetch(`/api/integrations/catalog${search?`?search=${encodeURIComponent(search)}`:''}`) as Promise<{items:ToolConnection[];cursor?:string}>;
 export const getToolkitTools=(toolkit:string)=>apiFetch(`/api/integrations/${toolkit}/tools`) as Promise<{tools:Array<{slug:string;description:string}>}>;
-export const beginToolConnection=(toolkit:string)=>apiFetch(`/api/integrations/${toolkit}/connect`,{method:'POST'}) as Promise<{authorizationUrl:string}>;
+export const beginToolConnection=(toolkit:string)=>apiFetch(`/api/integrations/${toolkit}/connect`,{method:'POST'}) as Promise<{authorizationUrl:string;connectionId?:string}>;
 export const disconnectTool=(toolkit:string)=>apiFetch(`/api/integrations/${toolkit}`,{method:'DELETE'}) as Promise<void>;
 export const setToolkitPreferences=(toolkit:string,setting:Required<ToolSetting>)=>apiFetch(`/api/integrations/${toolkit}/preferences`,{method:'PUT',body:JSON.stringify(setting)}) as Promise<{settings:ToolSettings}>;
 export const updateToolAccount=(accountId:string,action:'enable'|'disable'|'refresh')=>apiFetch(`/api/integrations/accounts/${accountId}/${action}`,{method:'POST'}) as Promise<{ok:true}>;
