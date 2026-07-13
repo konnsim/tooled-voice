@@ -50,6 +50,13 @@
       "when": 1783916531387,
       "tag": "0006_easy_venom",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783919582195,
+      "tag": "0007_smart_mantis",
+      "breakpoints": true
     }
   ]
 }

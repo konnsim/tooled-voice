@@ -1,0 +1,1 @@
+ALTER TABLE "user_profiles" ADD COLUMN "tool_settings" jsonb DEFAULT '{}'::jsonb NOT NULL;

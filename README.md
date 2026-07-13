@@ -66,7 +66,7 @@ Signup passes the mobile callback explicitly. The app exchanges the returned PKC
 
 ## Tool integrations
 
-With `COMPOSIO_API_KEY` configured, the **Connected Tools** card lets each user connect or remove Linear, GitHub, Gmail, Slack, and Notion accounts through Composio managed authentication. Realtime sessions receive one user-scoped Composio MCP endpoint with runtime tool discovery. **Ask me** automatically permits read-like operations and requires explicit approval for changes; **Allow** permits changes without confirmation. Permission changes apply to the next voice session.
+With `COMPOSIO_API_KEY` configured, the **Tools / Connections** launcher opens a searchable Composio directory. Users can connect multiple accounts, pause, enable, or reconnect each account, enable or disable an entire service, choose a per-service mutation policy, and exclude individual actions. These preferences are stored against the Supabase user and applied when creating the next user-scoped Composio MCP session. **Ask me** automatically permits read-like operations and requires explicit approval for changes; **Allow** permits changes without confirmation globally or for an explicitly selected service.
 
 ### Legacy Linear fallback
 

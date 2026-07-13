@@ -26,6 +26,7 @@ Run database generation and migration commands from `apps/api`. Run application-
 - Only `EXPO_PUBLIC_*` values may enter the mobile bundle. The Supabase publishable key and public API URL are intentionally public; privileged values stay server-side.
 - Preserve the authenticated boundary: the device obtains short-lived Realtime credentials from the API. Local tool execution and persistence pass through the API; third-party execution runs through a user-scoped Composio MCP session. Never return the Composio API key or provider credentials to the device.
 - Keep Linear MCP mutation approval default-deny. Persist explicit user opt-in before setting `require_approval` to `never`, and apply permission changes only to newly created Realtime sessions.
+- Treat Composio connection IDs and tool preferences as user-owned data. Validate ownership before account actions, keep new services enabled with ask-before-write defaults, and apply account/tool filters only when creating a new Realtime session.
 
 ## Working conventions
 
