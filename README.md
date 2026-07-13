@@ -80,7 +80,7 @@ LINEAR_MOBILE_REDIRECT_URI=tooledvoice://integrations/linear
 
 Do not put the Linear client secret or provider tokens in the mobile environment. In the app, use the Linear Connect control to authorize the account. The backend stores one-time PKCE state in Postgres, exchanges the code, encrypts access and refresh tokens with AES-256-GCM, refreshes expiring credentials, and returns to the app through `tooledvoice://integrations/linear`.
 
-For each Realtime session, the backend attaches Linear's official hosted MCP at `https://mcp.linear.app/mcp` using the refreshed OAuth access token. The token is sent server-to-server as part of session creation and is never returned to the mobile app. The assistant can use the MCP's complete available Linear tool set for issues, projects, comments, cycles, initiatives, milestones, documents, and related workspace operations. Read-only calls are approved automatically; changes require an explicit **Allow** or **Deny** decision in the app.
+For each Realtime session, the backend attaches Linear's official hosted MCP at `https://mcp.linear.app/mcp` using the refreshed OAuth access token. The token is sent server-to-server as part of session creation and is never returned to the mobile app. The assistant can use the MCP's complete available Linear tool set for issues, projects, comments, cycles, initiatives, milestones, documents, and related workspace operations. In the Linear connection card, **Ask me** automatically permits reads but requires **Allow** or **Deny** for every change; **Allow** permits changes without confirmation. The selected policy applies when the next voice session starts and defaults to **Ask me**.
 
 ## Database and API
 

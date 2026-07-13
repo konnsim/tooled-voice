@@ -9,6 +9,8 @@ export async function executeTool(request:ToolCallRequest){return toolResponseSc
 export async function persistConversationItem(conversationId:string,item:{role:'user'|'assistant'|'tool';kind:'transcript'|'tool_call'|'tool_result';transcript?:string;callId?:string;payload?:unknown;completed?:boolean}){await apiFetch(`/api/conversations/${conversationId}/items`,{method:'POST',body:JSON.stringify(item)})}
 export async function getLatestConversation(){const data=await apiFetch('/api/conversations') as {conversations:Array<{id:string;status:'active'|'completed'|'failed';updatedAt:string}>};const latest=data.conversations[0];if(!latest)return null;const history=await apiFetch(`/api/conversations/${latest.id}/items`) as {items:Array<{id:string;role:'user'|'assistant'|'tool';kind:string;transcript:string|null}>};return {id:latest.id,status:latest.status,items:history.items}}
 export const finishConversation=(conversationId:string,status:'completed'|'failed')=>apiFetch(`/api/conversations/${conversationId}/status`,{method:'POST',body:JSON.stringify({status})}) as Promise<{ok:true}>;
-export const getLinearStatus=()=>apiFetch('/api/integrations/linear/status') as Promise<{connected:boolean;expiresAt?:string;scopes:string[]}>;
+export type LinearStatus={connected:boolean;expiresAt?:string;scopes:string[];approvalPolicy:'ask'|'automatic'};
+export const getLinearStatus=()=>apiFetch('/api/integrations/linear/status') as Promise<LinearStatus>;
+export const setLinearApprovalPolicy=(approvalPolicy:'ask'|'automatic')=>apiFetch('/api/integrations/linear/approval-policy',{method:'PUT',body:JSON.stringify({approvalPolicy})}) as Promise<LinearStatus>;
 export const beginLinearConnection=()=>apiFetch('/api/integrations/linear/connect',{method:'POST'}) as Promise<{authorizationUrl:string}>;
 export const disconnectLinear=()=>apiFetch('/api/integrations/linear',{method:'DELETE'}) as Promise<void>;

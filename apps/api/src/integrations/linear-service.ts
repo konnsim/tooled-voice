@@ -10,6 +10,7 @@ const provider='linear';
 const stateLifetimeMs=10*60*1000;
 const refreshLeewayMs=2*60*1000;
 const refreshes=new Map<string,Promise<LinearCredentials>>();
+export type LinearApprovalPolicy='ask'|'automatic';
 
 export class LinearService {
   private readonly store:IntegrationStore;
@@ -33,10 +34,11 @@ export class LinearService {
     const token=await this.api.exchangeCode(oauthConfig(),{code,codeVerifier:oauthState.codeVerifier,redirectUri:oauthState.redirectUri},signal);
     await this.store.saveLinear(oauthState.userId,toCredentials(token));
   }
-  async status(userId:string):Promise<{connected:boolean;expiresAt?:string;scopes:string[]}>{
-    const [row]=await this.database.select({expiresAt:integrationAccounts.expiresAt,scopes:integrationAccounts.scopes}).from(integrationAccounts).where(and(eq(integrationAccounts.userId,userId),eq(integrationAccounts.provider,provider))).limit(1);
-    return row?{connected:true,...(row.expiresAt?{expiresAt:row.expiresAt.toISOString()}:{}),scopes:row.scopes??[]}:{connected:false,scopes:[]};
+  async status(userId:string):Promise<{connected:boolean;expiresAt?:string;scopes:string[];approvalPolicy:LinearApprovalPolicy}>{
+    const [row]=await this.database.select({expiresAt:integrationAccounts.expiresAt,scopes:integrationAccounts.scopes,approvalPolicy:integrationAccounts.approvalPolicy}).from(integrationAccounts).where(and(eq(integrationAccounts.userId,userId),eq(integrationAccounts.provider,provider))).limit(1);
+    return row?{connected:true,...(row.expiresAt?{expiresAt:row.expiresAt.toISOString()}:{}),scopes:row.scopes??[],approvalPolicy:row.approvalPolicy==='automatic'?'automatic':'ask'}:{connected:false,scopes:[],approvalPolicy:'ask'};
   }
+  async setApprovalPolicy(userId:string,approvalPolicy:LinearApprovalPolicy):Promise<void>{const [updated]=await this.database.update(integrationAccounts).set({approvalPolicy,updatedAt:new Date()}).where(and(eq(integrationAccounts.userId,userId),eq(integrationAccounts.provider,provider))).returning({id:integrationAccounts.id});if(!updated)throw new ApiError('INTEGRATION_UNAVAILABLE','Connect Linear before changing permissions',409,false)}
   async disconnect(userId:string,signal:AbortSignal):Promise<void>{
     const credentials=await this.store.getLinear(userId);
     if(credentials)await this.api.revoke(credentials.accessToken,signal).catch(()=>undefined);
@@ -47,6 +49,7 @@ export class LinearService {
     if(!credentials)return null;
     return (await this.validCredentials(userId,signal,credentials)).accessToken;
   }
+  async sessionConnection(userId:string,signal:AbortSignal):Promise<{accessToken:string;approvalPolicy:LinearApprovalPolicy}|null>{const accessToken=await this.accessToken(userId,signal);if(!accessToken)return null;const status=await this.status(userId);return{accessToken,approvalPolicy:status.approvalPolicy}}
   private async validCredentials(userId:string,signal:AbortSignal,credentials:LinearCredentials):Promise<LinearCredentials>{
     if(!credentials.expiresAt||new Date(credentials.expiresAt).getTime()-Date.now()>refreshLeewayMs)return credentials;
     if(!credentials.refreshToken)throw new ApiError('INTEGRATION_AUTH_EXPIRED','Reconnect Linear to continue',401,false);

@@ -1,0 +1,1 @@
+ALTER TABLE "integration_accounts" ADD COLUMN "approval_policy" text DEFAULT 'ask' NOT NULL;

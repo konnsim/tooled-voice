@@ -25,6 +25,7 @@ Run database generation and migration commands from `apps/api`. Run application-
 - Never commit `.env` files, Supabase service credentials, database URLs, OpenAI keys, provider tokens, encryption keys, native build output, or generated dependencies.
 - Only `EXPO_PUBLIC_*` values may enter the mobile bundle. The Supabase publishable key and public API URL are intentionally public; privileged values stay server-side.
 - Preserve the authenticated boundary: the device obtains short-lived Realtime credentials from the API. Local tool execution and persistence pass through the API; Linear execution runs through its hosted MCP using a server-supplied OAuth token that must never be returned to the device.
+- Keep Linear MCP mutation approval default-deny. Persist explicit user opt-in before setting `require_approval` to `never`, and apply permission changes only to newly created Realtime sessions.
 
 ## Working conventions
 
