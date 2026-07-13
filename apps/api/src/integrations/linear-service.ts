@@ -5,14 +5,13 @@ import { integrationAccounts,integrationOauthStates,userProfiles } from '../data
 import { ApiError } from '../errors/api-error.js';
 import { IntegrationStore,type LinearCredentials } from './integration-store.js';
 import { LinearApi,type LinearOAuthConfig,type LinearTokenResponse } from './linear-api.js';
-import type { CreateLinearIssueInput,CreatedLinearIssue,IntegrationServices,LinearIntegration } from './types.js';
 
 const provider='linear';
 const stateLifetimeMs=10*60*1000;
 const refreshLeewayMs=2*60*1000;
 const refreshes=new Map<string,Promise<LinearCredentials>>();
 
-export class LinearService implements LinearIntegration {
+export class LinearService {
   private readonly store:IntegrationStore;
   constructor(private readonly database:Database,private readonly api=new LinearApi(),store?:IntegrationStore){this.store=store??new IntegrationStore(database)}
   async createAuthorization(userId:string):Promise<{authorizationUrl:string}>{
@@ -43,13 +42,12 @@ export class LinearService implements LinearIntegration {
     if(credentials)await this.api.revoke(credentials.accessToken,signal).catch(()=>undefined);
     await this.store.deleteLinear(userId);
   }
-  async createIssue(userId:string,input:CreateLinearIssueInput,signal:AbortSignal):Promise<CreatedLinearIssue>{
-    const credentials=await this.validCredentials(userId,signal);
-    return this.api.createIssue(credentials.accessToken,input,signal);
-  }
-  private async validCredentials(userId:string,signal:AbortSignal):Promise<LinearCredentials>{
+  async accessToken(userId:string,signal:AbortSignal):Promise<string|null>{
     const credentials=await this.store.getLinear(userId);
-    if(!credentials)throw new ApiError('INTEGRATION_UNAVAILABLE','Connect Linear before creating an issue',409,false);
+    if(!credentials)return null;
+    return (await this.validCredentials(userId,signal,credentials)).accessToken;
+  }
+  private async validCredentials(userId:string,signal:AbortSignal,credentials:LinearCredentials):Promise<LinearCredentials>{
     if(!credentials.expiresAt||new Date(credentials.expiresAt).getTime()-Date.now()>refreshLeewayMs)return credentials;
     if(!credentials.refreshToken)throw new ApiError('INTEGRATION_AUTH_EXPIRED','Reconnect Linear to continue',401,false);
     const active=refreshes.get(userId);
@@ -63,7 +61,6 @@ export class LinearService implements LinearIntegration {
   }
 }
 
-export const createIntegrationServices=(database:Database):IntegrationServices=>({linear:new LinearService(database)});
 export const linearMobileRedirectUri=()=>process.env.LINEAR_MOBILE_REDIRECT_URI??'tooledvoice://integrations/linear';
 
 function oauthConfig():LinearOAuthConfig{

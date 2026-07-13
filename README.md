@@ -1,11 +1,11 @@
 # Tooled Voice
 
-Tooled Voice is a native live voice assistant built with Expo development builds, OpenAI Realtime over direct WebRTC, Supabase Auth/Postgres, and an authenticated Hono tool backend. Audio travels between the device and OpenAI; tool calls and application data travel through the API.
+Tooled Voice is a native live voice assistant built with Expo development builds, OpenAI Realtime over direct WebRTC, Supabase Auth/Postgres, an authenticated Hono backend, and Linear's official hosted MCP server. Audio travels between the device and OpenAI; local tools and application data travel through the API, while connected Linear operations run through its hosted MCP.
 
 ## Architecture
 
 - `apps/mobile`: Expo/React Native app with Supabase email/password auth, SecureStore-backed sessions, PKCE confirmation deep links, `react-native-webrtc`, and native in-call audio routing/focus management.
-- `apps/api`: Hono API for Supabase JWT verification, OpenAI Realtime client-secret minting, conversation persistence, encrypted provider credentials, and typed tool dispatch.
+- `apps/api`: Hono API for Supabase JWT verification, OpenAI Realtime client-secret minting, conversation persistence, encrypted provider credentials, OAuth refresh, and typed local-tool dispatch.
 - `packages/shared`: shared Zod contracts and TypeScript types.
 
 The API is deployed at `https://tooled-voice-api.vercel.app`. Its Vercel project uses `apps/api` as the monorepo Root Directory.
@@ -80,7 +80,7 @@ LINEAR_MOBILE_REDIRECT_URI=tooledvoice://integrations/linear
 
 Do not put the Linear client secret or provider tokens in the mobile environment. In the app, use the Linear Connect control to authorize the account. The backend stores one-time PKCE state in Postgres, exchanges the code, encrypts access and refresh tokens with AES-256-GCM, refreshes expiring credentials, and returns to the app through `tooledvoice://integrations/linear`.
 
-Once connected, ask the assistant to create a Linear issue. The backend defaults to the first team returned for the connected account, so users do not need to know a team name. A spoken team name or key remains available as an explicit override.
+For each Realtime session, the backend attaches Linear's official hosted MCP at `https://mcp.linear.app/mcp` using the refreshed OAuth access token. The token is sent server-to-server as part of session creation and is never returned to the mobile app. The assistant can use the MCP's complete available Linear tool set for issues, projects, comments, cycles, initiatives, milestones, documents, and related workspace operations. Read-only calls are approved automatically; changes require an explicit **Allow** or **Deny** decision in the app.
 
 ## Database and API
 
@@ -97,7 +97,7 @@ Run the backend locally from the repository root:
 pnpm dev:api
 ```
 
-The server listens on `http://localhost:3000`; `GET /api/health` is public. Conversation, Realtime, and tool endpoints require a Supabase access token. The API verifies JWTs against Supabase JWKS and gives the device only a short-lived OpenAI Realtime client secret.
+The server listens on `http://localhost:3000`; `GET /api/health` is public. Conversation, Realtime, integration, and local-tool endpoints require a Supabase access token. The API verifies JWTs against Supabase JWKS and gives the device only a short-lived OpenAI Realtime client secret.
 
 ## Native development
 

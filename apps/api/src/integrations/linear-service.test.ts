@@ -21,14 +21,14 @@ describe('LinearService OAuth',()=>{
     expect(url.searchParams.get('code_challenge')).toBe(createHash('sha256').update(String(stateRow?.codeVerifier)).digest('base64url'));
     expect(url.searchParams.get('scope')).toBe('read,write');
   });
-  it('refreshes an expired credential before creating an issue',async()=>{
+  it('refreshes an expired credential before returning it for MCP',async()=>{
     const expired:LinearCredentials={accessToken:'old-access',refreshToken:'refresh',tokenType:'Bearer',scope:['read','write'],expiresAt:new Date(0).toISOString()};
     const store={getLinear:vi.fn().mockResolvedValue(expired),saveLinear:vi.fn().mockResolvedValue(undefined)};
-    const api={refreshToken:vi.fn().mockResolvedValue({access_token:'new-access',refresh_token:'new-refresh',token_type:'Bearer',scope:'read write',expires_in:3600}),createIssue:vi.fn().mockResolvedValue({id:'issue-1',identifier:'TOO-7',title:'Voice issue',url:'https://linear.app/issue/TOO-7',team:'Tooled-voice'})};
+    const api={refreshToken:vi.fn().mockResolvedValue({access_token:'new-access',refresh_token:'new-refresh',token_type:'Bearer',scope:'read write',expires_in:3600})};
     const service=new LinearService({} as never,api as unknown as LinearApi,store as unknown as IntegrationStore);
-    await service.createIssue('00000000-0000-4000-8000-000000000002',{title:'Voice issue'},AbortSignal.timeout(1000));
+    await expect(service.accessToken('00000000-0000-4000-8000-000000000002',AbortSignal.timeout(1000))).resolves.toBe('new-access');
     expect(api.refreshToken).toHaveBeenCalledWith(expect.anything(),'refresh',expect.any(AbortSignal));
-    expect(api.createIssue).toHaveBeenCalledWith('new-access',{title:'Voice issue'},expect.any(AbortSignal));
     expect(store.saveLinear).toHaveBeenCalledOnce();
   });
+  it('returns null when Linear is not connected',async()=>{const store={getLinear:vi.fn().mockResolvedValue(null)};const service=new LinearService({} as never,new LinearApi(),store as unknown as IntegrationStore);await expect(service.accessToken('00000000-0000-4000-8000-000000000003',AbortSignal.timeout(1000))).resolves.toBeNull()});
 });

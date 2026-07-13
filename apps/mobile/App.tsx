@@ -72,6 +72,7 @@ function VoiceScreen({email}:{email:string}){
     <View style={styles.statusRow}><View style={[styles.dot,{backgroundColor:voice.state==='error'?'#ff5d43':active?'#e8ff58':'#77796e'}]}/><Text style={styles.status}>{voice.muted&&active?'MUTED':labels[voice.state]}</Text><Pressable onPress={()=>setShowDiagnostics(value=>!value)} style={styles.labButton} accessibilityRole="button" accessibilityLabel="Toggle voice diagnostics"><Text style={styles.labButtonText}>VOICE LAB</Text></Pressable></View>
     {showDiagnostics?<View style={styles.diagnostics}><View style={styles.diagnosticsHeader}><Text style={styles.diagnosticsTitle}>VOICE LAB / LIVE</Text><Pressable onPress={()=>setShowDiagnostics(false)}><Text style={styles.diagnosticsClose}>CLOSE</Text></Pressable></View><Text style={styles.diagnosticsSummary}>ROUTE {voice.route.toUpperCase()}  ·  VAD {voice.vadEagerness.toUpperCase()}</Text><View style={styles.metricGrid}>{labMetrics.map(([label,value])=><View key={label} style={styles.metricCell}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>)}</View></View>:null}
     <LinearIntegrationControl/>
+    {voice.mcpApproval?<View style={styles.approval} accessibilityLiveRegion="assertive"><Text style={styles.approvalEyebrow}>LINEAR ACTION</Text><Text style={styles.approvalTitle}>{friendlyToolName(voice.mcpApproval.name)}</Text><Text style={styles.approvalBody}>{summarizeToolArguments(voice.mcpApproval.arguments)}</Text><View style={styles.approvalActions}><Pressable onPress={voice.rejectMcpAction} style={({pressed})=>[styles.approvalSecondary,pressed&&styles.pressed]} accessibilityRole="button" accessibilityLabel="Deny Linear action"><Text style={styles.approvalSecondaryText}>DENY</Text></Pressable><Pressable onPress={voice.approveMcpAction} style={({pressed})=>[styles.approvalPrimary,pressed&&styles.pressed]} accessibilityRole="button" accessibilityLabel="Allow Linear action"><Text style={styles.approvalPrimaryText}>ALLOW</Text></Pressable></View></View>:null}
     <ScrollView ref={history} style={styles.history} contentContainerStyle={styles.historyContent} onContentSizeChange={()=>history.current?.scrollToEnd({animated:true})}>
       {voice.history.length===0?<View style={styles.empty}><Text style={styles.emptyIndex}>01</Text><Text style={styles.emptyTitle}>{active?'Live line open.':'Start a live voice.'}{`\n`}{active?'Just start talking.':'Stay in the conversation.'}</Text><Text style={styles.emptyBody}>{active?'Speak naturally, pause when you are done, and interrupt at any time.':'Connect once for a continuous, hands-free conversation with your tools.'}</Text></View>:voice.history.map(item=><View key={item.id} style={[styles.line,item.role==='assistant'&&styles.assistant]}><Text style={styles.role}>{item.role==='user'?'YOU':'VOICE'}</Text><Text style={styles.transcript}>{item.text}</Text></View>)}
     </ScrollView>
@@ -123,6 +124,15 @@ const styles=StyleSheet.create({
   metricCell:{width:'50%',borderRightWidth:1,borderBottomWidth:1,borderColor:'#303229',padding:10},
   metricLabel:{color:muted,fontSize:8,fontWeight:'800',letterSpacing:.8},
   metricValue:{color:ink,fontSize:17,fontWeight:'800',marginTop:4},
+  approval:{position:'absolute',top:150,left:14,right:14,zIndex:12,backgroundColor:'#191b15',borderWidth:1,borderColor:acid,padding:18,shadowColor:'#000',shadowOpacity:.75,shadowRadius:20,elevation:14},
+  approvalEyebrow:{color:acid,fontSize:9,fontWeight:'900',letterSpacing:2},
+  approvalTitle:{color:ink,fontSize:24,lineHeight:29,fontWeight:'900',marginTop:10},
+  approvalBody:{color:muted,fontSize:14,lineHeight:20,marginTop:8},
+  approvalActions:{flexDirection:'row',gap:10,marginTop:18},
+  approvalSecondary:{flex:1,height:48,borderWidth:1,borderColor:'#74443c',alignItems:'center',justifyContent:'center'},
+  approvalSecondaryText:{color:'#ff765f',fontSize:11,fontWeight:'900',letterSpacing:1.5},
+  approvalPrimary:{flex:1,height:48,backgroundColor:acid,alignItems:'center',justifyContent:'center'},
+  approvalPrimaryText:{color:base,fontSize:11,fontWeight:'900',letterSpacing:1.5},
   history:{flex:1,marginTop:10},
   historyContent:{flexGrow:1,paddingVertical:24},
   empty:{flex:1,justifyContent:'center',borderTopWidth:1,borderColor:'#303229'},
@@ -153,3 +163,6 @@ const styles=StyleSheet.create({
   vadToggle:{color:'#77796e',fontSize:8,fontWeight:'800',letterSpacing:1.1,paddingTop:12},
   hint:{color:'#77796e',fontSize:9,fontWeight:'700',letterSpacing:1.1,marginTop:16},
 });
+
+function friendlyToolName(name:string){return name.replace(/_/g,' ').replace(/\b\w/g,letter=>letter.toUpperCase())}
+function summarizeToolArguments(raw:string){try{const value=JSON.parse(raw) as Record<string,unknown>;const summary=Object.entries(value).slice(0,4).map(([key,item])=>`${friendlyToolName(key)}: ${typeof item==='string'?item:JSON.stringify(item)}`).join('\n');return summary||'Allow this change in your Linear workspace?'}catch{return 'Allow this change in your Linear workspace?'}}
