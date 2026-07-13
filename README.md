@@ -123,7 +123,7 @@ Rebuild after changing native dependencies, Expo plugins, microphone permissions
 
 Sign in or create an account, confirm the email on the device, then tap **Start Live Voice** and allow microphone access. The microphone remains live for a continuous conversation: speak naturally, pause to let semantic turn detection respond, and speak over the assistant to interrupt. Use **Mute** without ending the session, switch between **Speaker** and **Earpiece**, or **End** to close it. **Turn Speed** switches live between fast (`high`) and natural (`auto`) semantic VAD so both can be compared without reconnecting. Asking “What time is it in Sydney?” exercises the complete `getCurrentTime` tool path.
 
-Tap **Voice Lab** while connected to inspect recent connection, speech, first-audio, interruption, tool, route, and audio-focus events. The same events are emitted as one-line JSON records in the Metro terminal with `scope: "tooled-voice/realtime"`. `first_audio` reports total time from detected speech stop, with model-response time in its detail field.
+Tap **Voice Lab** while connected to see the current connection, turn-response, first-audio, latest-tool, interruption, route, and VAD metrics. Detailed events remain in the Metro terminal as one-line JSON records with `scope: "tooled-voice/realtime"`. `first_audio` reports total time from detected speech stop, with model-response time in its detail field.
 
 ## Root scripts
 

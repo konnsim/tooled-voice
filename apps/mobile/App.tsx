@@ -64,10 +64,13 @@ function VoiceScreen({email}:{email:string}){
   const active=['connected','listening','thinking','speaking'].includes(voice.state);
   const pending=['authenticating','connecting','reconnecting'].includes(voice.state);
   const liveLabel=voice.muted?'MUTED':voice.state==='listening'?'LISTENING':voice.state==='speaking'?'SPEAKING':voice.state==='thinking'?'THINKING':'LIVE';
+  const metric=(event:string)=>voice.diagnostics.find(item=>item.event===event)?.elapsedMs;
+  const metricValue=(event:string)=>{const value=metric(event);return value===undefined?'—':`${value}ms`};
+  const labMetrics=[['CONNECTION',metricValue('channel_open')],['TURN RESPONSE',metricValue('response_created')],['FIRST AUDIO',metricValue('first_audio')],['LATEST TOOL',metricValue('tool_finished')],['INTERRUPTIONS',String(voice.diagnostics.filter(item=>item.event==='interruption_detected').length)]];
   return <SafeAreaView style={styles.safe}><StatusBar style="light"/>
     <View style={styles.header}><View><Text style={styles.eyebrow}>TOOLED / VOICE</Text><Text style={styles.identity}>{email}</Text></View><Pressable onPress={()=>void supabase.auth.signOut()}><Text style={styles.signout}>SIGN OUT</Text></Pressable></View>
     <View style={styles.statusRow}><View style={[styles.dot,{backgroundColor:voice.state==='error'?'#ff5d43':active?'#e8ff58':'#77796e'}]}/><Text style={styles.status}>{voice.muted&&active?'MUTED':labels[voice.state]}</Text><Pressable onPress={()=>setShowDiagnostics(value=>!value)} style={styles.labButton} accessibilityRole="button" accessibilityLabel="Toggle voice diagnostics"><Text style={styles.labButtonText}>VOICE LAB</Text></Pressable></View>
-    {showDiagnostics?<View style={styles.diagnostics}><View style={styles.diagnosticsHeader}><Text style={styles.diagnosticsTitle}>VOICE LAB / LIVE</Text><Pressable onPress={()=>setShowDiagnostics(false)}><Text style={styles.diagnosticsClose}>CLOSE</Text></Pressable></View><Text style={styles.diagnosticsSummary}>ROUTE {voice.route.toUpperCase()}  ·  VAD {voice.vadEagerness.toUpperCase()}</Text>{voice.diagnostics.slice(0,8).map(item=><View key={item.id} style={styles.diagnosticRow}><Text style={styles.diagnosticEvent}>{item.event.replaceAll('_',' ').toUpperCase()}</Text><Text style={styles.diagnosticValue}>{item.elapsedMs===undefined?'—':`${item.elapsedMs}ms`}{item.detail?`  ${item.detail}`:''}</Text></View>)}</View>:null}
+    {showDiagnostics?<View style={styles.diagnostics}><View style={styles.diagnosticsHeader}><Text style={styles.diagnosticsTitle}>VOICE LAB / LIVE</Text><Pressable onPress={()=>setShowDiagnostics(false)}><Text style={styles.diagnosticsClose}>CLOSE</Text></Pressable></View><Text style={styles.diagnosticsSummary}>ROUTE {voice.route.toUpperCase()}  ·  VAD {voice.vadEagerness.toUpperCase()}</Text><View style={styles.metricGrid}>{labMetrics.map(([label,value])=><View key={label} style={styles.metricCell}><Text style={styles.metricLabel}>{label}</Text><Text style={styles.metricValue}>{value}</Text></View>)}</View><Text style={styles.diagnosticsNote}>DETAILED EVENTS CONTINUE IN METRO</Text></View>:null}
     <LinearIntegrationControl/>
     <ScrollView ref={history} style={styles.history} contentContainerStyle={styles.historyContent} onContentSizeChange={()=>history.current?.scrollToEnd({animated:true})}>
       {voice.history.length===0?<View style={styles.empty}><Text style={styles.emptyIndex}>01</Text><Text style={styles.emptyTitle}>{active?'Live line open.':'Start a live voice.'}{`\n`}{active?'Just start talking.':'Stay in the conversation.'}</Text><Text style={styles.emptyBody}>{active?'Speak naturally, pause when you are done, and interrupt at any time.':'Connect once for a continuous, hands-free conversation with your tools.'}</Text></View>:voice.history.map(item=><View key={item.id} style={[styles.line,item.role==='assistant'&&styles.assistant]}><Text style={styles.role}>{item.role==='user'?'YOU':'VOICE'}</Text><Text style={styles.transcript}>{item.text}</Text></View>)}
@@ -116,9 +119,11 @@ const styles=StyleSheet.create({
   diagnosticsTitle:{color:acid,fontSize:10,fontWeight:'900',letterSpacing:1.6},
   diagnosticsClose:{color:muted,fontSize:8,fontWeight:'800',letterSpacing:1.2,padding:5},
   diagnosticsSummary:{color:ink,fontSize:9,fontWeight:'800',letterSpacing:1,marginTop:9,marginBottom:7},
-  diagnosticRow:{flexDirection:'row',justifyContent:'space-between',gap:8,borderTopWidth:1,borderColor:'#303229',paddingVertical:5},
-  diagnosticEvent:{color:muted,fontSize:8,fontWeight:'700',flex:1},
-  diagnosticValue:{color:ink,fontSize:8,textAlign:'right',flex:1},
+  metricGrid:{flexDirection:'row',flexWrap:'wrap',borderTopWidth:1,borderLeftWidth:1,borderColor:'#303229'},
+  metricCell:{width:'50%',borderRightWidth:1,borderBottomWidth:1,borderColor:'#303229',padding:10},
+  metricLabel:{color:muted,fontSize:8,fontWeight:'800',letterSpacing:.8},
+  metricValue:{color:ink,fontSize:17,fontWeight:'800',marginTop:4},
+  diagnosticsNote:{color:'#77796e',fontSize:7,fontWeight:'800',letterSpacing:1,marginTop:10},
   history:{flex:1,marginTop:10},
   historyContent:{flexGrow:1,paddingVertical:24},
   empty:{flex:1,justifyContent:'center',borderTopWidth:1,borderColor:'#303229'},
