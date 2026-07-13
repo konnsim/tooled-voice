@@ -1,6 +1,6 @@
 # Tooled Voice
 
-Tooled Voice is a native push-to-talk assistant built with Expo development builds, OpenAI Realtime over direct WebRTC, Supabase Auth/Postgres, and an authenticated Hono tool backend. Audio travels between the device and OpenAI; tool calls and application data travel through the API.
+Tooled Voice is a native live voice assistant built with Expo development builds, OpenAI Realtime over direct WebRTC, Supabase Auth/Postgres, and an authenticated Hono tool backend. Audio travels between the device and OpenAI; tool calls and application data travel through the API.
 
 ## Architecture
 
@@ -121,7 +121,7 @@ pnpm dev:native
 
 Rebuild after changing native dependencies, Expo plugins, microphone permissions, identifiers, or the URL scheme. JavaScript-only changes can be picked up by Metro reload.
 
-Sign in or create an account, confirm the email on the device, tap Connect, allow microphone access, then hold the talk button while speaking. Asking “What time is it in Sydney?” exercises the complete `getCurrentTime` tool path.
+Sign in or create an account, confirm the email on the device, then tap **Start Live Voice** and allow microphone access. The microphone remains live for a continuous conversation: speak naturally, pause to let semantic turn detection respond, and speak over the assistant to interrupt. Use **Mute** without ending the session, or **End** to close it. Asking “What time is it in Sydney?” exercises the complete `getCurrentTime` tool path.
 
 ## Root scripts
 

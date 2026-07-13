@@ -57,7 +57,26 @@ function AuthScreen({initialMessage}:{initialMessage:string|undefined}){
   </SafeAreaView>
 }
 
-function VoiceScreen({email}:{email:string}){const voice=useVoiceSession();const active=['connected','listening','thinking','speaking'].includes(voice.state);const pending=['authenticating','connecting','reconnecting'].includes(voice.state);return <SafeAreaView style={styles.safe}><StatusBar style="light"/><View style={styles.header}><View><Text style={styles.eyebrow}>TOOLED / VOICE</Text><Text style={styles.identity}>{email}</Text></View><Pressable onPress={()=>void supabase.auth.signOut()}><Text style={styles.signout}>SIGN OUT</Text></Pressable></View><View style={styles.statusRow}><View style={[styles.dot,{backgroundColor:voice.state==='error'?'#ff5d43':active?'#e8ff58':'#77796e'}]}/><Text style={styles.status}>{labels[voice.state]}</Text></View><LinearIntegrationControl/><ScrollView style={styles.history} contentContainerStyle={styles.historyContent}>{voice.history.length===0?<View style={styles.empty}><Text style={styles.emptyIndex}>01</Text><Text style={styles.emptyTitle}>Hold the signal.{`\n`}Say what you need.</Text><Text style={styles.emptyBody}>Ask for the current time or create a Linear issue to test the complete tool path.</Text></View>:voice.history.map(item=><View key={item.id} style={[styles.line,item.role==='assistant'&&styles.assistant]}><Text style={styles.role}>{item.role==='user'?'YOU':'VOICE'}</Text><Text style={styles.transcript}>{item.text}</Text></View>)}</ScrollView>{voice.error?<Text style={styles.error}>{voice.error}</Text>:null}<View style={styles.controls}>{!active?<Pressable disabled={pending} onPress={()=>void voice.connect()} style={[styles.connect,pending&&styles.primaryDisabled]}><Text style={styles.connectText}>{pending?'LINKING…':'CONNECT'}</Text></Pressable>:<><Pressable onPressIn={voice.startTalking} onPressOut={voice.stopTalking} accessibilityRole="button" accessibilityLabel="Hold to talk" style={({pressed})=>[styles.talk,pressed&&styles.talkPressed]}><View style={styles.talkCore}><Text style={styles.talkText}>{voice.state==='listening'?'RELEASE':'HOLD'}</Text></View></Pressable><Pressable onPress={voice.disconnect} accessibilityRole="button" accessibilityLabel="End voice session"><Text style={styles.endSession}>END SESSION</Text></Pressable></>}<Text style={styles.hint}>{active?'HOLD TO SPEAK · RELEASE TO SEND':'ESTABLISH A SECURE REALTIME SESSION'}</Text></View></SafeAreaView>}
+function VoiceScreen({email}:{email:string}){
+  const voice=useVoiceSession();
+  const history=useRef<ScrollView>(null);
+  const active=['connected','listening','thinking','speaking'].includes(voice.state);
+  const pending=['authenticating','connecting','reconnecting'].includes(voice.state);
+  const liveLabel=voice.muted?'MUTED':voice.state==='listening'?'LISTENING':voice.state==='speaking'?'SPEAKING':voice.state==='thinking'?'THINKING':'LIVE';
+  return <SafeAreaView style={styles.safe}><StatusBar style="light"/>
+    <View style={styles.header}><View><Text style={styles.eyebrow}>TOOLED / VOICE</Text><Text style={styles.identity}>{email}</Text></View><Pressable onPress={()=>void supabase.auth.signOut()}><Text style={styles.signout}>SIGN OUT</Text></Pressable></View>
+    <View style={styles.statusRow}><View style={[styles.dot,{backgroundColor:voice.state==='error'?'#ff5d43':active?'#e8ff58':'#77796e'}]}/><Text style={styles.status}>{voice.muted&&active?'MUTED':labels[voice.state]}</Text></View>
+    <LinearIntegrationControl/>
+    <ScrollView ref={history} style={styles.history} contentContainerStyle={styles.historyContent} onContentSizeChange={()=>history.current?.scrollToEnd({animated:true})}>
+      {voice.history.length===0?<View style={styles.empty}><Text style={styles.emptyIndex}>01</Text><Text style={styles.emptyTitle}>{active?'Live line open.':'Start a live voice.'}{`\n`}{active?'Just start talking.':'Stay in the conversation.'}</Text><Text style={styles.emptyBody}>{active?'Speak naturally, pause when you are done, and interrupt at any time.':'Connect once for a continuous, hands-free conversation with your tools.'}</Text></View>:voice.history.map(item=><View key={item.id} style={[styles.line,item.role==='assistant'&&styles.assistant]}><Text style={styles.role}>{item.role==='user'?'YOU':'VOICE'}</Text><Text style={styles.transcript}>{item.text}</Text></View>)}
+    </ScrollView>
+    {voice.error?<Text style={styles.error}>{voice.error}</Text>:null}
+    <View style={styles.controls}>{!active?<Pressable disabled={pending} onPress={()=>void voice.connect()} style={[styles.connect,pending&&styles.primaryDisabled]} accessibilityRole="button" accessibilityLabel="Start live voice"><Text style={styles.connectText}>{pending?'OPENING LIVE LINE…':'START LIVE VOICE'}</Text></Pressable>:<>
+      <View style={[styles.liveOrb,voice.state==='speaking'&&styles.liveOrbSpeaking,voice.muted&&styles.liveOrbMuted]} accessibilityLiveRegion="polite"><View style={[styles.liveCore,voice.muted&&styles.liveCoreMuted]}><Text style={[styles.liveText,voice.muted&&styles.liveTextMuted]}>{liveLabel}</Text></View></View>
+      <View style={styles.liveActions}><Pressable onPress={voice.toggleMuted} style={({pressed})=>[styles.liveAction,voice.muted&&styles.liveActionActive,pressed&&styles.pressed]} accessibilityRole="button" accessibilityLabel={voice.muted?'Unmute microphone':'Mute microphone'}><Text style={[styles.liveActionText,voice.muted&&styles.liveActionTextActive]}>{voice.muted?'UNMUTE':'MUTE'}</Text></Pressable><Pressable onPress={voice.disconnect} style={({pressed})=>[styles.liveAction,styles.endAction,pressed&&styles.pressed]} accessibilityRole="button" accessibilityLabel="End live voice session"><Text style={styles.endActionText}>END</Text></Pressable></View>
+    </>}<Text style={styles.hint}>{active?(voice.muted?'MICROPHONE OFF · TAP UNMUTE TO CONTINUE':'LIVE MIC · SPEAK NATURALLY · INTERRUPT ANY TIME'):'ONE CONNECTION · CONTINUOUS CONVERSATION'}</Text></View>
+  </SafeAreaView>
+}
 
 const ink='#f0f1e8',base='#11130e',acid='#e8ff58',muted='#9b9d91';
 const styles=StyleSheet.create({
@@ -100,10 +119,19 @@ const styles=StyleSheet.create({
   controls:{alignItems:'center',paddingBottom:22},
   connect:{width:'100%',height:64,borderWidth:1,borderColor:acid,alignItems:'center',justifyContent:'center'},
   connectText:{color:acid,fontWeight:'900',letterSpacing:2},
-  talk:{width:142,height:142,borderRadius:71,borderWidth:1,borderColor:'#626557',alignItems:'center',justifyContent:'center'},
-  talkPressed:{borderColor:acid,transform:[{scale:.96}]},
-  talkCore:{width:112,height:112,borderRadius:56,backgroundColor:acid,alignItems:'center',justifyContent:'center'},
-  talkText:{color:base,fontSize:14,fontWeight:'900',letterSpacing:2},
+  liveOrb:{width:126,height:126,borderRadius:63,borderWidth:1,borderColor:acid,alignItems:'center',justifyContent:'center'},
+  liveOrbSpeaking:{borderWidth:4},
+  liveOrbMuted:{borderColor:'#5a5c52'},
+  liveCore:{width:98,height:98,borderRadius:49,backgroundColor:acid,alignItems:'center',justifyContent:'center'},
+  liveCoreMuted:{backgroundColor:'#303229'},
+  liveText:{color:base,fontSize:12,fontWeight:'900',letterSpacing:1.7},
+  liveTextMuted:{color:muted},
+  liveActions:{flexDirection:'row',gap:10,marginTop:14},
+  liveAction:{height:42,minWidth:112,borderWidth:1,borderColor:'#5a5c52',alignItems:'center',justifyContent:'center',paddingHorizontal:20},
+  liveActionActive:{borderColor:acid},
+  liveActionText:{color:ink,fontSize:10,fontWeight:'900',letterSpacing:1.5},
+  liveActionTextActive:{color:acid},
+  endAction:{borderColor:'#74443c'},
+  endActionText:{color:'#ff765f',fontSize:10,fontWeight:'900',letterSpacing:1.5},
   hint:{color:'#77796e',fontSize:9,fontWeight:'700',letterSpacing:1.1,marginTop:16},
-  endSession:{color:'#9b9d91',fontSize:9,fontWeight:'800',letterSpacing:1.4,padding:10,marginTop:3},
 });

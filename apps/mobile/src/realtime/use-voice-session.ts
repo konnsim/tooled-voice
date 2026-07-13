@@ -7,6 +7,7 @@ export interface Transcript {id:string;role:'user'|'assistant';text:string}
 type ClientEvent=Parameters<ConstructorParameters<typeof RealtimeClient>[0]>[0];
 export function useVoiceSession(){
   const[state,setState]=useState<ConnectionState>('idle');
+  const[muted,setMuted]=useState(false);
   const[history,setHistory]=useState<Transcript[]>([]);
   const[error,setError]=useState<string>();
   const listener=useRef<(event:ClientEvent)=>void>(()=>undefined);
@@ -16,8 +17,9 @@ export function useVoiceSession(){
   listener.current=(event:ClientEvent)=>{
     if(!mounted.current)return;
     if(event.state){setState(event.state);if(['connected','listening','thinking','speaking','reconnecting'].includes(event.state))shouldReconnect.current=true}
+    if(event.muted!==undefined)setMuted(event.muted);
     if(event.error)setError(event.error);
-    if(event.transcript)setHistory(items=>{const transcript=event.transcript!;const index=items.findIndex(item=>item.id===transcript.id);const next={id:transcript.id,role:transcript.role,text:transcript.text};if(index<0)return[...items,next];return items.map((item,itemIndex)=>itemIndex===index?next:item)});
+    if(event.transcript)setHistory(items=>{const transcript=event.transcript!;const index=items.findIndex(item=>item.id===transcript.id);if(!transcript.text.trim())return transcript.final?items.filter(item=>item.id!==transcript.id):items;const next={id:transcript.id,role:transcript.role,text:transcript.text};if(index<0)return[...items,next];return items.map((item,itemIndex)=>itemIndex===index?next:item)});
   };
   client.current??=new RealtimeClient(event=>listener.current(event));
   useEffect(()=>{
@@ -36,5 +38,6 @@ export function useVoiceSession(){
   },[]);
   const connect=useCallback(async()=>{shouldReconnect.current=true;setError(undefined);setState('authenticating');await client.current?.connect()},[]);
   const disconnect=useCallback(()=>{shouldReconnect.current=false;client.current?.disconnect(true);setHistory([])},[]);
-  return{state,history,error,connect,disconnect,startTalking:()=>client.current?.startTalking(),stopTalking:()=>client.current?.stopTalking()};
+  const toggleMuted=useCallback(()=>{const next=!muted;client.current?.setMuted(next);setMuted(next)},[muted]);
+  return{state,history,error,muted,connect,disconnect,toggleMuted};
 }
