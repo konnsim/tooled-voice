@@ -37,7 +37,6 @@ Run database generation and migration commands from `apps/api`. Run application-
 - Rebuild the native app after changing native dependencies, Expo plugins, permissions, bundle identifiers, or URL schemes. JavaScript-only changes can use Metro reload.
 - Update `README.md`, `.env.example` files, migrations, and tests when setup or runtime behavior changes.
 
-
 # Ultracite Code Standards
 
 This project uses **Ultracite**, a zero-config preset that enforces strict code quality standards through automated formatting and linting.
