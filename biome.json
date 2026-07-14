@@ -1,0 +1,99 @@
+{
+  "extends": [
+    "ultracite/biome/core",
+    "ultracite/biome/react",
+    "ultracite/biome/vitest"
+  ],
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "formatter": {
+    "includes": [
+      "**",
+      "!apps/mobile/android/**",
+      "!apps/mobile/ios/**",
+      "!apps/mobile/.expo/**",
+      "!apps/api/drizzle/meta/**"
+    ]
+  },
+  "linter": {
+    "includes": [
+      "**",
+      "!apps/mobile/android/**",
+      "!apps/mobile/ios/**",
+      "!apps/mobile/.expo/**",
+      "!apps/api/drizzle/meta/**"
+    ],
+    "rules": {
+      "complexity": {
+        "noExcessiveCognitiveComplexity": "off",
+        "noForEach": "off",
+        "noVoid": "off"
+      },
+      "correctness": {
+        "useExhaustiveDependencies": "info"
+      },
+      "performance": {
+        "noBarrelFile": "off",
+        "noNamespaceImport": "off"
+      },
+      "style": {
+        "noExportedImports": "off",
+        "noNestedTernary": "off",
+        "noNonNullAssertion": "off",
+        "noParameterProperties": "off",
+        "useErrorCause": "off",
+        "useBlockStatements": "off",
+        "useConsistentArrayType": "off",
+        "useConsistentMemberAccessibility": "off",
+        "useConsistentMethodSignatures": "off",
+        "useConsistentTypeDefinitions": "off",
+        "useFilenamingConvention": "off"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "info",
+        "useAwait": "info"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/mobile/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "performance": {
+            "noJsxPropsBind": "off"
+          },
+          "suspicious": {
+            "noUnnecessaryConditions": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/mobile/src/realtime/**/*.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noEmptyBlockStatements": "off",
+            "noExplicitAny": "off",
+            "noUnnecessaryConditions": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.test.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noThenProperty": "off"
+          }
+        }
+      }
+    }
+  ],
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single"
+    }
+  }
+}

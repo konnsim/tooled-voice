@@ -1,1 +1,7 @@
-{"rewrites":[{"source":"/auth/confirmed","destination":"/api"},{"source":"/oauth/(.*)","destination":"/api"},{"source":"/api/(.*)","destination":"/api"}]}
+{
+  "rewrites": [
+    { "source": "/auth/confirmed", "destination": "/api" },
+    { "source": "/oauth/(.*)", "destination": "/api" },
+    { "source": "/api/(.*)", "destination": "/api" }
+  ]
+}

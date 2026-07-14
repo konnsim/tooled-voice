@@ -1,8 +1,14 @@
 {
   "compilerOptions": {
-    "target": "ES2022", "module": "NodeNext", "moduleResolution": "NodeNext",
-    "strict": true, "noUncheckedIndexedAccess": true, "exactOptionalPropertyTypes": true,
-    "skipLibCheck": true, "types": ["node"], "noEmit": true
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "noEmit": true
   },
   "include": ["api", "src", "drizzle.config.ts", "vitest.config.ts"]
 }

@@ -1,19 +1,25 @@
 {
+  "devDependencies": {
+    "@biomejs/biome": "2.5.2",
+    "lefthook": "^2.1.10",
+    "turbo": "^2.10.4",
+    "ultracite": "7.9.3"
+  },
   "name": "tooled-voice",
-  "version": "0.0.0",
-  "private": true,
-  "packageManager": "pnpm@10.33.0",
   "scripts": {
-    "check": "turbo run check",
+    "typecheck": "turbo run check",
+    "check": "ultracite check",
+    "fix": "ultracite fix",
     "test": "turbo run test",
     "dev": "turbo run dev",
     "dev:api": "pnpm --filter @tooled-voice/api dev",
     "dev:native": "turbo run dev:native --filter=@tooled-voice/mobile",
     "android": "turbo run android --filter=@tooled-voice/mobile",
     "ios": "turbo run ios --filter=@tooled-voice/mobile",
-    "web": "turbo run web --filter=@tooled-voice/mobile"
+    "web": "turbo run web --filter=@tooled-voice/mobile",
+    "prepare": "lefthook install"
   },
-  "devDependencies": {
-    "turbo": "^2.10.4"
-  }
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0"
 }

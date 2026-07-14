@@ -1,5 +1,18 @@
 {
   "enabledPlugins": {
     "expo@claude-plugins-official": true
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "pnpm run fix --skip=correctness/noUnusedImports",
+            "type": "command"
+          }
+        ],
+        "matcher": "Write|Edit"
+      }
+    ]
   }
 }
