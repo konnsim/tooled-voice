@@ -141,13 +141,16 @@ Tap **Voice Lab** while connected to see the current connection, turn-response, 
 | `pnpm dev:native` | Start Expo Metro for an installed development build |
 | `pnpm android` | Build, install, and run the Android app |
 | `pnpm ios` | Build, install, and run the iOS app |
-| `pnpm check` | Type-check all workspaces |
+| `pnpm check` | Check formatting and lint rules with Ultracite |
+| `pnpm fix` | Apply Ultracite formatting and safe fixes |
+| `pnpm typecheck` | Type-check all workspaces |
 | `pnpm test` | Run all workspace tests |
 
 ## Verification
 
 ```sh
 pnpm check
+pnpm typecheck
 pnpm test
 cd apps/mobile && pnpm dlx expo-doctor@latest
 ```
