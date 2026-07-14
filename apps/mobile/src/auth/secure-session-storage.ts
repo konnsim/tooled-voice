@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from "expo-secure-store";
 
 const CHUNK = 1800;
 export const secureSessionStorage = {
@@ -10,7 +10,7 @@ export const secureSessionStorage = {
         SecureStore.getItemAsync(`${key}.${i}`)
       )
     );
-    return chunks.every(Boolean) ? chunks.join('') : null;
+    return chunks.every(Boolean) ? chunks.join("") : null;
   },
   async removeItem(key: string) {
     const count = Number((await SecureStore.getItemAsync(`${key}.count`)) ?? 0);
@@ -23,7 +23,7 @@ export const secureSessionStorage = {
   },
   async setItem(key: string, value: string) {
     await this.removeItem(key);
-    const chunks = value.match(new RegExp(`.{1,${CHUNK}}`, 'gs')) ?? [];
+    const chunks = value.match(new RegExp(`.{1,${CHUNK}}`, "gs")) ?? [];
     await Promise.all(
       chunks.map((chunk, i) => SecureStore.setItemAsync(`${key}.${i}`, chunk))
     );

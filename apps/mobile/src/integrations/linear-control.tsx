@@ -1,5 +1,5 @@
-import * as WebBrowser from 'expo-web-browser';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import * as WebBrowser from "expo-web-browser";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -10,7 +10,7 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
+} from "react-native";
 import {
   beginToolConnection,
   getToolConnections,
@@ -23,9 +23,9 @@ import {
   type ToolConnection,
   type ToolSettings,
   updateToolAccount,
-} from '../api/client';
+} from "../api/client";
 
-const integrationCallbackUrl = 'tooledvoice://integrations/composio';
+const integrationCallbackUrl = "tooledvoice://integrations/composio";
 const toolkitPrefixPattern = /^[A-Z]+_/;
 const underscorePattern = /_/g;
 const firstCharacterPattern = /^./;
@@ -37,7 +37,7 @@ export function ToolIntegrationControl() {
   const [accounts, setAccounts] = useState<ToolAccount[]>([]);
   const [settings, setSettings] = useState<ToolSettings>({});
   const [approvalPolicy, setApprovalPolicy] =
-    useState<ToolApprovalPolicy>('ask');
+    useState<ToolApprovalPolicy>("ask");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [connectionMessage, setConnectionMessage] = useState<string>();
@@ -59,10 +59,10 @@ export function ToolIntegrationControl() {
         if (value?.startsWith(integrationCallbackUrl)) {
           setOpen(true);
           setConnectionMessage(
-            'Connection returned. Refreshing account status…'
+            "Connection returned. Refreshing account status…"
           );
           await refresh();
-          setConnectionMessage('Account status refreshed.');
+          setConnectionMessage("Account status refreshed.");
         }
       } catch (reason) {
         setError(message(reason));
@@ -85,8 +85,8 @@ export function ToolIntegrationControl() {
           <Text style={styles.eyebrow}>TOOLS / CONNECTIONS</Text>
           <Text style={styles.launchTitle}>
             {connected
-              ? `${connected} connection${connected === 1 ? '' : 's'} live`
-              : 'Connect your tools'}
+              ? `${connected} connection${connected === 1 ? "" : "s"} live`
+              : "Connect your tools"}
           </Text>
         </View>
         <Text style={styles.launchAction}>MANAGE →</Text>
@@ -138,7 +138,7 @@ function ToolManager(props: {
   setApprovalPolicy(value: ToolApprovalPolicy): void;
   setSettings(value: ToolSettings): void;
 }) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [catalog, setCatalog] = useState<ToolConnection[]>(props.connections);
   const [selected, setSelected] = useState<ToolConnection>();
   const [tools, setTools] = useState<
@@ -184,7 +184,7 @@ function ToolManager(props: {
   async function connect(toolkit: string) {
     props.setBusy(true);
     props.setError(undefined);
-    props.setConnectionMessage('Waiting for authentication in your browser…');
+    props.setConnectionMessage("Waiting for authentication in your browser…");
     try {
       const { authorizationUrl, connectionId } =
         await beginToolConnection(toolkit);
@@ -199,9 +199,9 @@ function ToolManager(props: {
         }
       );
       props.setConnectionMessage(
-        result.type === 'success'
-          ? 'Authentication returned. Checking account status…'
-          : 'Checking whether the connection completed…'
+        result.type === "success"
+          ? "Authentication returned. Checking account status…"
+          : "Checking whether the connection completed…"
       );
       const state = await props.onRefresh();
       const account = connectionId
@@ -211,21 +211,21 @@ function ToolManager(props: {
         (candidate) => candidate.slug === toolkit && candidate.connected
       );
       if (account?.active || (!connectionId && toolkitConnected))
-        props.setConnectionMessage('Connection complete.');
+        props.setConnectionMessage("Connection complete.");
       else if (
         account &&
-        ['FAILED', 'EXPIRED', 'REVOKED'].includes(account.status)
+        ["FAILED", "EXPIRED", "REVOKED"].includes(account.status)
       )
         props.setConnectionMessage(
           `Connection failed: ${account.status.toLowerCase()}. Try again when ready.`
         );
-      else if (result.type === 'success')
+      else if (result.type === "success")
         props.setConnectionMessage(
-          'Authentication returned, but the connection is still pending.'
+          "Authentication returned, but the connection is still pending."
         );
       else
         props.setConnectionMessage(
-          'Connection was not completed. You can try again when ready.'
+          "Connection was not completed. You can try again when ready."
         );
     } catch (reason) {
       props.setConnectionMessage(undefined);
@@ -266,7 +266,7 @@ function ToolManager(props: {
   }
   const activeAccounts = selectedAccounts.filter((account) => account.active);
   const pendingAccounts = selectedAccounts.filter(
-    (account) => account.status === 'INITIATED'
+    (account) => account.status === "INITIATED"
   );
   return (
     <View style={styles.screen}>
@@ -295,10 +295,10 @@ function ToolManager(props: {
           <Text style={styles.detailTitle}>{selected.name}</Text>
           <Text style={styles.detailMeta}>
             {activeAccounts.length
-              ? `${activeAccounts.length} ACCOUNT${activeAccounts.length === 1 ? '' : 'S'} LIVE`
+              ? `${activeAccounts.length} ACCOUNT${activeAccounts.length === 1 ? "" : "S"} LIVE`
               : pendingAccounts.length
-                ? 'CONNECTION PENDING'
-                : 'NOT CONNECTED'}
+                ? "CONNECTION PENDING"
+                : "NOT CONNECTED"}
           </Text>
           <Pressable
             disabled={props.busy}
@@ -307,10 +307,10 @@ function ToolManager(props: {
           >
             <Text style={styles.primaryText}>
               {activeAccounts.length
-                ? 'ADD ANOTHER ACCOUNT'
+                ? "ADD ANOTHER ACCOUNT"
                 : pendingAccounts.length
-                  ? 'TRY CONNECTION AGAIN'
-                  : 'CONNECT ACCOUNT'}
+                  ? "TRY CONNECTION AGAIN"
+                  : "CONNECT ACCOUNT"}
             </Text>
           </Pressable>
           {selectedAccounts.map((account) => (
@@ -328,12 +328,12 @@ function ToolManager(props: {
                   {account.status}
                 </Text>
               </View>
-              {account.status === 'INITIATED' ? null : (
+              {account.status === "INITIATED" ? null : (
                 <View style={styles.rowActions}>
                   {account.active ? null : (
                     <Pressable
                       onPress={() =>
-                        void run(() => updateToolAccount(account.id, 'refresh'))
+                        void run(() => updateToolAccount(account.id, "refresh"))
                       }
                     >
                       <Text style={styles.smallAction}>RECONNECT</Text>
@@ -344,13 +344,13 @@ function ToolManager(props: {
                       void run(() =>
                         updateToolAccount(
                           account.id,
-                          account.active ? 'disable' : 'enable'
+                          account.active ? "disable" : "enable"
                         )
                       )
                     }
                   >
                     <Text style={styles.smallAction}>
-                      {account.active ? 'PAUSE' : 'ENABLE'}
+                      {account.active ? "PAUSE" : "ENABLE"}
                     </Text>
                   </Pressable>
                 </View>
@@ -360,7 +360,7 @@ function ToolManager(props: {
           <Section label="AVAILABLE IN VOICE">
             <Choice
               active={setting.enabled !== false}
-              label={setting.enabled === false ? 'DISABLED' : 'ENABLED'}
+              label={setting.enabled === false ? "DISABLED" : "ENABLED"}
               onPress={() => void save({ enabled: setting.enabled === false })}
             />
           </Section>
@@ -368,18 +368,18 @@ function ToolManager(props: {
             <View style={styles.choices}>
               <Choice
                 active={
-                  (setting.approvalPolicy ?? props.approvalPolicy) === 'ask'
+                  (setting.approvalPolicy ?? props.approvalPolicy) === "ask"
                 }
                 label="ASK ME"
-                onPress={() => void save({ approvalPolicy: 'ask' })}
+                onPress={() => void save({ approvalPolicy: "ask" })}
               />
               <Choice
                 active={
                   (setting.approvalPolicy ?? props.approvalPolicy) ===
-                  'automatic'
+                  "automatic"
                 }
                 label="ALLOW"
-                onPress={() => void save({ approvalPolicy: 'automatic' })}
+                onPress={() => void save({ approvalPolicy: "automatic" })}
               />
             </View>
           </Section>
@@ -425,21 +425,21 @@ function ToolManager(props: {
             <Text style={styles.policyLabel}>DEFAULT FOR CHANGES</Text>
             <View style={styles.choices}>
               <Choice
-                active={props.approvalPolicy === 'ask'}
+                active={props.approvalPolicy === "ask"}
                 label="ASK ME"
                 onPress={() =>
                   void run(async () => {
-                    const result = await setToolApprovalPolicy('ask');
+                    const result = await setToolApprovalPolicy("ask");
                     props.setApprovalPolicy(result.approvalPolicy);
                   })
                 }
               />
               <Choice
-                active={props.approvalPolicy === 'automatic'}
+                active={props.approvalPolicy === "automatic"}
                 label="ALLOW"
                 onPress={() =>
                   void run(async () => {
-                    const result = await setToolApprovalPolicy('automatic');
+                    const result = await setToolApprovalPolicy("automatic");
                     props.setApprovalPolicy(result.approvalPolicy);
                   })
                 }
@@ -469,7 +469,7 @@ function ToolManager(props: {
                       connection.connected && styles.active,
                     ]}
                   >
-                    {connection.connected ? 'CONNECTED' : 'AVAILABLE'}
+                    {connection.connected ? "CONNECTED" : "AVAILABLE"}
                   </Text>
                 </View>
                 <Text style={styles.arrow}>→</Text>
@@ -518,31 +518,31 @@ function Choice({
 }
 const humanize = (value: string) =>
   value
-    .replace(toolkitPrefixPattern, '')
-    .replace(underscorePattern, ' ')
+    .replace(toolkitPrefixPattern, "")
+    .replace(underscorePattern, " ")
     .toLowerCase()
     .replace(firstCharacterPattern, (letter) => letter.toUpperCase());
 const message = (reason: unknown) =>
-  reason instanceof Error ? reason.message : 'TOOLS_UNAVAILABLE';
-const acid = '#e8ff58',
-  ink = '#f0f1e8',
-  base = '#11130e',
-  muted = '#929488',
-  line = '#303229';
+  reason instanceof Error ? reason.message : "TOOLS_UNAVAILABLE";
+const acid = "#e8ff58",
+  ink = "#f0f1e8",
+  base = "#11130e",
+  muted = "#929488",
+  line = "#303229";
 const styles = StyleSheet.create({
   account: {
-    alignItems: 'center',
+    alignItems: "center",
     borderBottomWidth: 1,
     borderColor: line,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     minHeight: 64,
   },
-  accountName: { color: ink, fontSize: 13, fontWeight: '800' },
+  accountName: { color: ink, fontSize: 13, fontWeight: "800" },
   accountStatus: {
     color: muted,
     fontSize: 8,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1,
     marginTop: 4,
   },
@@ -551,29 +551,29 @@ const styles = StyleSheet.create({
   back: {
     color: muted,
     fontSize: 9,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1.2,
     paddingVertical: 18,
   },
   catalog: { paddingBottom: 40 },
-  catalogName: { color: ink, fontSize: 17, fontWeight: '800' },
+  catalogName: { color: ink, fontSize: 17, fontWeight: "800" },
   catalogRow: {
-    alignItems: 'center',
+    alignItems: "center",
     borderBottomWidth: 1,
     borderColor: line,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     minHeight: 67,
   },
   catalogStatus: {
     color: muted,
     fontSize: 8,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1.2,
     marginTop: 5,
   },
   check: {
-    borderColor: '#55574e',
+    borderColor: "#55574e",
     borderWidth: 1,
     height: 14,
     marginTop: 2,
@@ -581,35 +581,35 @@ const styles = StyleSheet.create({
   },
   checkActive: { backgroundColor: acid, borderColor: acid },
   choice: {
-    alignItems: 'center',
-    borderColor: '#55574e',
+    alignItems: "center",
+    borderColor: "#55574e",
     borderWidth: 1,
     height: 36,
-    justifyContent: 'center',
+    justifyContent: "center",
     minWidth: 92,
     paddingHorizontal: 12,
   },
-  choiceActive: { backgroundColor: '#25281d', borderColor: acid },
-  choices: { flexDirection: 'row', gap: 8 },
+  choiceActive: { backgroundColor: "#25281d", borderColor: acid },
+  choices: { flexDirection: "row", gap: 8 },
   choiceText: {
     color: muted,
     fontSize: 9,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1.1,
   },
   choiceTextActive: { color: acid },
   close: {
     color: muted,
     fontSize: 9,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1.4,
     padding: 8,
   },
   connectionNotice: {
-    alignItems: 'center',
+    alignItems: "center",
     borderBottomWidth: 1,
     borderColor: line,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 10,
     minHeight: 46,
   },
@@ -617,7 +617,7 @@ const styles = StyleSheet.create({
     color: muted,
     flex: 1,
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: "800",
     letterSpacing: 0.4,
     lineHeight: 15,
   },
@@ -625,70 +625,70 @@ const styles = StyleSheet.create({
   detailMeta: {
     color: acid,
     fontSize: 9,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1.4,
     marginTop: 8,
   },
   detailTitle: {
     color: ink,
     fontSize: 40,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: -1.2,
   },
   error: {
-    backgroundColor: '#211815',
+    backgroundColor: "#211815",
     bottom: 18,
-    color: '#ff765f',
+    color: "#ff765f",
     fontSize: 10,
     left: 20,
     padding: 10,
-    position: 'absolute',
+    position: "absolute",
     right: 20,
   },
-  eyebrow: { color: acid, fontSize: 9, fontWeight: '900', letterSpacing: 2 },
+  eyebrow: { color: acid, fontSize: 9, fontWeight: "900", letterSpacing: 2 },
   hint: { color: muted, fontSize: 11, lineHeight: 17, marginBottom: 8 },
   launch: {
-    alignItems: 'center',
+    alignItems: "center",
     borderBottomWidth: 1,
     borderColor: line,
     borderTopWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginTop: 18,
     paddingVertical: 14,
   },
   launchAction: {
     color: muted,
     fontSize: 9,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1.2,
   },
-  launchTitle: { color: ink, fontSize: 14, fontWeight: '800', marginTop: 5 },
+  launchTitle: { color: ink, fontSize: 14, fontWeight: "800", marginTop: 5 },
   loader: { margin: 20 },
   policy: { borderBottomWidth: 1, borderColor: line, paddingVertical: 16 },
   policyLabel: {
     color: muted,
     fontSize: 8,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1.4,
     marginBottom: 9,
   },
   pressed: { opacity: 0.65 },
   primary: {
-    alignItems: 'center',
+    alignItems: "center",
     backgroundColor: acid,
     height: 50,
-    justifyContent: 'center',
+    justifyContent: "center",
     marginTop: 18,
   },
   primaryDisabled: { opacity: 0.55 },
   primaryText: {
     color: base,
     fontSize: 10,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1.4,
   },
-  rowActions: { flexDirection: 'row', gap: 14 },
+  rowActions: { flexDirection: "row", gap: 14 },
   screen: {
     backgroundColor: base,
     flex: 1,
@@ -700,7 +700,7 @@ const styles = StyleSheet.create({
     borderColor: acid,
     color: ink,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: "700",
     height: 54,
     letterSpacing: 1.1,
   },
@@ -713,40 +713,40 @@ const styles = StyleSheet.create({
   sectionLabel: {
     color: acid,
     fontSize: 9,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1.6,
     marginBottom: 12,
   },
   smallAction: {
     color: acid,
     fontSize: 8,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: 1,
   },
   title: {
     color: ink,
     fontSize: 42,
-    fontWeight: '900',
+    fontWeight: "900",
     letterSpacing: -1.5,
     lineHeight: 45,
     marginTop: 10,
   },
   toolCopy: { flex: 1 },
   toolDescription: { color: muted, fontSize: 10, lineHeight: 15, marginTop: 4 },
-  toolName: { color: ink, fontSize: 12, fontWeight: '800' },
+  toolName: { color: ink, fontSize: 12, fontWeight: "800" },
   toolRow: {
     borderBottomWidth: 1,
     borderColor: line,
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     paddingVertical: 13,
   },
   top: {
-    alignItems: 'flex-start',
+    alignItems: "flex-start",
     borderBottomWidth: 1,
     borderColor: line,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    justifyContent: "space-between",
     paddingBottom: 22,
   },
 });

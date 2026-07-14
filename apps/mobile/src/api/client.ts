@@ -1,6 +1,6 @@
-import { type ToolCallRequest, toolResponseSchema } from '@tooled-voice/shared';
-import { supabase } from '../auth/supabase';
-import { config } from '../config';
+import { type ToolCallRequest, toolResponseSchema } from "@tooled-voice/shared";
+import { supabase } from "../auth/supabase";
+import { config } from "../config";
 export class ApiClientError extends Error {
   constructor(
     public readonly code: string,
@@ -12,7 +12,7 @@ export class ApiClientError extends Error {
 }
 async function token() {
   const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) throw new Error('AUTH_REQUIRED');
+  if (error || !data.session) throw new Error("AUTH_REQUIRED");
   return data.session.access_token;
 }
 export async function apiFetch(path: string, init: RequestInit = {}) {
@@ -22,45 +22,45 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
     headers: {
       ...init.headers,
       Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
   });
   const data = response.status === 204 ? undefined : await response.json();
   if (!response.ok) {
     const error = data?.error;
     throw new ApiClientError(
-      typeof error?.code === 'string' ? error.code : `HTTP_${response.status}`,
-      typeof error?.message === 'string' ? error.message : 'The request failed',
+      typeof error?.code === "string" ? error.code : `HTTP_${response.status}`,
+      typeof error?.message === "string" ? error.message : "The request failed",
       error?.retryable === true
     );
   }
   return data;
 }
 export const createRealtimeCredential = (conversationId?: string) =>
-  apiFetch('/api/realtime/session', {
+  apiFetch("/api/realtime/session", {
     body: JSON.stringify(conversationId ? { conversationId } : {}),
-    method: 'POST',
+    method: "POST",
   }) as Promise<{
     clientSecret: string;
     expiresAt?: number;
     sessionId?: string;
     model: string;
     conversationId: string;
-    toolApprovalPolicies: Record<string, 'ask' | 'automatic'>;
+    toolApprovalPolicies: Record<string, "ask" | "automatic">;
   }>;
 export async function executeTool(request: ToolCallRequest) {
   return toolResponseSchema.parse(
-    await apiFetch('/api/tools', {
+    await apiFetch("/api/tools", {
       body: JSON.stringify(request),
-      method: 'POST',
+      method: "POST",
     })
   );
 }
 export async function persistConversationItem(
   conversationId: string,
   item: {
-    role: 'user' | 'assistant' | 'tool';
-    kind: 'transcript' | 'tool_call' | 'tool_result';
+    role: "user" | "assistant" | "tool";
+    kind: "transcript" | "tool_call" | "tool_result";
     transcript?: string;
     callId?: string;
     payload?: unknown;
@@ -69,14 +69,14 @@ export async function persistConversationItem(
 ) {
   await apiFetch(`/api/conversations/${conversationId}/items`, {
     body: JSON.stringify(item),
-    method: 'POST',
+    method: "POST",
   });
 }
 export async function getLatestConversation() {
-  const data = (await apiFetch('/api/conversations')) as {
+  const data = (await apiFetch("/api/conversations")) as {
     conversations: Array<{
       id: string;
-      status: 'active' | 'completed' | 'failed';
+      status: "active" | "completed" | "failed";
       updatedAt: string;
     }>;
   };
@@ -85,7 +85,7 @@ export async function getLatestConversation() {
   const history = (await apiFetch(`/api/conversations/${latest.id}/items`)) as {
     items: Array<{
       id: string;
-      role: 'user' | 'assistant' | 'tool';
+      role: "user" | "assistant" | "tool";
       kind: string;
       transcript: string | null;
     }>;
@@ -94,32 +94,32 @@ export async function getLatestConversation() {
 }
 export const finishConversation = (
   conversationId: string,
-  status: 'completed' | 'failed'
+  status: "completed" | "failed"
 ) =>
   apiFetch(`/api/conversations/${conversationId}/status`, {
     body: JSON.stringify({ status }),
-    method: 'POST',
+    method: "POST",
   }) as Promise<{ ok: true }>;
 export type LinearStatus = {
   connected: boolean;
   expiresAt?: string;
   scopes: string[];
-  approvalPolicy: 'ask' | 'automatic';
+  approvalPolicy: "ask" | "automatic";
 };
 export const getLinearStatus = () =>
-  apiFetch('/api/integrations/linear/status') as Promise<LinearStatus>;
-export const setLinearApprovalPolicy = (approvalPolicy: 'ask' | 'automatic') =>
-  apiFetch('/api/integrations/linear/approval-policy', {
+  apiFetch("/api/integrations/linear/status") as Promise<LinearStatus>;
+export const setLinearApprovalPolicy = (approvalPolicy: "ask" | "automatic") =>
+  apiFetch("/api/integrations/linear/approval-policy", {
     body: JSON.stringify({ approvalPolicy }),
-    method: 'PUT',
+    method: "PUT",
   }) as Promise<LinearStatus>;
 export const beginLinearConnection = () =>
-  apiFetch('/api/integrations/linear/connect', { method: 'POST' }) as Promise<{
+  apiFetch("/api/integrations/linear/connect", { method: "POST" }) as Promise<{
     authorizationUrl: string;
   }>;
 export const disconnectLinear = () =>
-  apiFetch('/api/integrations/linear', { method: 'DELETE' }) as Promise<void>;
-export type ToolApprovalPolicy = 'ask' | 'automatic';
+  apiFetch("/api/integrations/linear", { method: "DELETE" }) as Promise<void>;
+export type ToolApprovalPolicy = "ask" | "automatic";
 export type ToolConnection = {
   slug: string;
   name: string;
@@ -143,7 +143,7 @@ export type ToolSetting = {
 };
 export type ToolSettings = Record<string, ToolSetting>;
 export const getToolConnections = () =>
-  apiFetch('/api/integrations') as Promise<{
+  apiFetch("/api/integrations") as Promise<{
     configured: boolean;
     approvalPolicy: ToolApprovalPolicy;
     settings: ToolSettings;
@@ -152,7 +152,7 @@ export const getToolConnections = () =>
   }>;
 export const searchToolCatalog = (search: string) =>
   apiFetch(
-    `/api/integrations/catalog${search ? `?search=${encodeURIComponent(search)}` : ''}`
+    `/api/integrations/catalog${search ? `?search=${encodeURIComponent(search)}` : ""}`
   ) as Promise<{ items: ToolConnection[]; cursor?: string }>;
 export const getToolkitTools = (toolkit: string) =>
   apiFetch(`/api/integrations/${toolkit}/tools`) as Promise<{
@@ -160,11 +160,11 @@ export const getToolkitTools = (toolkit: string) =>
   }>;
 export const beginToolConnection = (toolkit: string) =>
   apiFetch(`/api/integrations/${toolkit}/connect`, {
-    method: 'POST',
+    method: "POST",
   }) as Promise<{ authorizationUrl: string; connectionId?: string }>;
 export const disconnectTool = (toolkit: string) =>
   apiFetch(`/api/integrations/${toolkit}`, {
-    method: 'DELETE',
+    method: "DELETE",
   }) as Promise<void>;
 export const setToolkitPreferences = (
   toolkit: string,
@@ -172,17 +172,17 @@ export const setToolkitPreferences = (
 ) =>
   apiFetch(`/api/integrations/${toolkit}/preferences`, {
     body: JSON.stringify(setting),
-    method: 'PUT',
+    method: "PUT",
   }) as Promise<{ settings: ToolSettings }>;
 export const updateToolAccount = (
   accountId: string,
-  action: 'enable' | 'disable' | 'refresh'
+  action: "enable" | "disable" | "refresh"
 ) =>
   apiFetch(`/api/integrations/accounts/${accountId}/${action}`, {
-    method: 'POST',
+    method: "POST",
   }) as Promise<{ ok: true }>;
 export const setToolApprovalPolicy = (approvalPolicy: ToolApprovalPolicy) =>
-  apiFetch('/api/integrations/approval-policy', {
+  apiFetch("/api/integrations/approval-policy", {
     body: JSON.stringify({ approvalPolicy }),
-    method: 'PUT',
+    method: "PUT",
   }) as Promise<{ approvalPolicy: ToolApprovalPolicy }>;

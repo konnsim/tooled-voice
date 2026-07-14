@@ -1,27 +1,27 @@
-import type { ConnectionState } from '@tooled-voice/shared';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
-import { getLatestConversation } from '../api/client';
-import type { AudioRoute } from './audio-session';
+import type { ConnectionState } from "@tooled-voice/shared";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
+import { getLatestConversation } from "../api/client";
+import type { AudioRoute } from "./audio-session";
 import {
   type McpApproval,
   RealtimeClient,
   type VoiceDiagnostic,
-} from './realtime-client';
+} from "./realtime-client";
 export interface Transcript {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   text: string;
 }
 type ClientEvent = Parameters<
   ConstructorParameters<typeof RealtimeClient>[0]
 >[0];
 export function useVoiceSession() {
-  const [state, setState] = useState<ConnectionState>('idle');
+  const [state, setState] = useState<ConnectionState>("idle");
   const [muted, setMuted] = useState(false);
   const [speaker, setSpeaker] = useState(true);
-  const [route, setRoute] = useState<AudioRoute>('speaker');
-  const [vadEagerness, setVadEagerness] = useState<'auto' | 'high'>('high');
+  const [route, setRoute] = useState<AudioRoute>("speaker");
+  const [vadEagerness, setVadEagerness] = useState<"auto" | "high">("high");
   const [diagnostics, setDiagnostics] = useState<VoiceDiagnostic[]>([]);
   const [history, setHistory] = useState<Transcript[]>([]);
   const [mcpApproval, setMcpApproval] = useState<McpApproval | null>(null);
@@ -30,7 +30,7 @@ export function useVoiceSession() {
   const client = useRef<RealtimeClient | undefined>(undefined);
   const mounted = useRef(true);
   const shouldReconnect = useRef(false);
-  const currentState = useRef<ConnectionState>('idle');
+  const currentState = useRef<ConnectionState>("idle");
   listener.current = (event: ClientEvent) => {
     if (!mounted.current) return;
     if (event.state) {
@@ -38,11 +38,11 @@ export function useVoiceSession() {
       setState(event.state);
       if (
         [
-          'connected',
-          'listening',
-          'thinking',
-          'speaking',
-          'reconnecting',
+          "connected",
+          "listening",
+          "thinking",
+          "speaking",
+          "reconnecting",
         ].includes(event.state)
       )
         shouldReconnect.current = true;
@@ -87,12 +87,12 @@ export function useVoiceSession() {
                 (
                   item
                 ): item is typeof item & {
-                  role: 'user' | 'assistant';
+                  role: "user" | "assistant";
                   transcript: string;
                 } =>
-                  item.kind === 'transcript' &&
+                  item.kind === "transcript" &&
                   item.transcript !== null &&
-                  (item.role === 'user' || item.role === 'assistant')
+                  (item.role === "user" || item.role === "assistant")
               )
               .map((item) => ({
                 id: item.id,
@@ -100,26 +100,26 @@ export function useVoiceSession() {
                 text: item.transcript,
               }))
           );
-        if (latest?.status === 'active')
+        if (latest?.status === "active")
           client.current?.setConversationIfUnset(latest.id);
       })
       .catch(() => undefined);
-    const subscription = AppState.addEventListener('change', (next) => {
-      if (next !== 'active') {
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next !== "active") {
         if (
           shouldReconnect.current &&
           [
-            'connected',
-            'listening',
-            'thinking',
-            'speaking',
-            'reconnecting',
+            "connected",
+            "listening",
+            "thinking",
+            "speaking",
+            "reconnecting",
           ].includes(currentState.current)
         )
           client.current?.disconnect();
       } else if (
         shouldReconnect.current &&
-        currentState.current === 'disconnected'
+        currentState.current === "disconnected"
       )
         void client.current?.connect(true);
     });
@@ -133,8 +133,8 @@ export function useVoiceSession() {
   const connect = useCallback(async () => {
     shouldReconnect.current = true;
     setError(undefined);
-    currentState.current = 'authenticating';
-    setState('authenticating');
+    currentState.current = "authenticating";
+    setState("authenticating");
     await client.current?.connect();
   }, []);
   const disconnect = useCallback(() => {
@@ -160,7 +160,7 @@ export function useVoiceSession() {
     setSpeaker(next);
   }, [speaker]);
   const toggleVadEagerness = useCallback(() => {
-    const next = vadEagerness === 'high' ? 'auto' : 'high';
+    const next = vadEagerness === "high" ? "auto" : "high";
     client.current?.setVadEagerness(next);
     setVadEagerness(next);
   }, [vadEagerness]);

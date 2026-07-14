@@ -1,23 +1,23 @@
-import { Linking } from 'react-native';
-import { supabase } from './supabase';
+import { Linking } from "react-native";
+import { supabase } from "./supabase";
 
-export const authCallbackUrl = 'tooledvoice://auth/callback';
+export const authCallbackUrl = "tooledvoice://auth/callback";
 
 const exchangedCodes = new Set<string>();
 
 export async function handleAuthDeepLink(url: string): Promise<void> {
   const callback = new URL(url);
   if (
-    callback.protocol !== 'tooledvoice:' ||
-    callback.hostname !== 'auth' ||
-    callback.pathname !== '/callback'
+    callback.protocol !== "tooledvoice:" ||
+    callback.hostname !== "auth" ||
+    callback.pathname !== "/callback"
   )
     return;
 
-  const errorDescription = callback.searchParams.get('error_description');
+  const errorDescription = callback.searchParams.get("error_description");
   if (errorDescription) throw new Error(errorDescription);
 
-  const code = callback.searchParams.get('code');
+  const code = callback.searchParams.get("code");
   if (!code || exchangedCodes.has(code)) return;
   exchangedCodes.add(code);
 
@@ -36,7 +36,7 @@ export function subscribeToAuthDeepLinks(
       onError(
         error instanceof Error
           ? error.message
-          : 'Could not confirm your account.'
+          : "Could not confirm your account."
       )
     );
   };
@@ -48,10 +48,10 @@ export function subscribeToAuthDeepLinks(
       onError(
         error instanceof Error
           ? error.message
-          : 'Could not open the confirmation link.'
+          : "Could not open the confirmation link."
       )
     );
-  const subscription = Linking.addEventListener('url', (event) =>
+  const subscription = Linking.addEventListener("url", (event) =>
     open(event.url)
   );
   return () => subscription.remove();

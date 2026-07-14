@@ -1,9 +1,9 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import * as schema from './schema.js';
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import * as schema from "./schema.js";
 export type Database = ReturnType<typeof createDatabase>;
 export function createDatabase(url = process.env.DATABASE_URL) {
-  if (!url) throw new Error('DATABASE_URL is required');
+  if (!url) throw new Error("DATABASE_URL is required");
   const client = postgres(url, {
     connect_timeout: 10,
     idle_timeout: 20,

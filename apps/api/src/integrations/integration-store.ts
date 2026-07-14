@@ -1,20 +1,20 @@
-import { and, eq } from 'drizzle-orm';
-import { z } from 'zod';
-import type { Database } from '../database/client.js';
-import { integrationAccounts, userProfiles } from '../database/schema.js';
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+import type { Database } from "../database/client.js";
+import { integrationAccounts, userProfiles } from "../database/schema.js";
 import {
   createEnvironmentKeyring,
   decryptToken,
   encryptToken,
   type Keyring,
-} from '../encryption/token-crypto.js';
+} from "../encryption/token-crypto.js";
 
 export const linearCredentialsSchema = z.object({
   accessToken: z.string().min(1),
   expiresAt: z.string().datetime().optional(),
   refreshToken: z.string().min(1).optional(),
   scope: z.array(z.string()).default([]),
-  tokenType: z.string().default('Bearer'),
+  tokenType: z.string().default("Bearer"),
 });
 export type LinearCredentials = z.infer<typeof linearCredentialsSchema>;
 
@@ -33,7 +33,7 @@ export class IntegrationStore {
       .where(
         and(
           eq(integrationAccounts.userId, userId),
-          eq(integrationAccounts.provider, 'linear')
+          eq(integrationAccounts.provider, "linear")
         )
       )
       .limit(1);
@@ -67,7 +67,7 @@ export class IntegrationStore {
         encryptionKeyVersion: encrypted.keyVersion,
         encryptionTag: encrypted.tag,
         expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt) : null,
-        provider: 'linear',
+        provider: "linear",
         scopes: parsed.scope,
         userId,
       })
@@ -90,7 +90,7 @@ export class IntegrationStore {
       .where(
         and(
           eq(integrationAccounts.userId, userId),
-          eq(integrationAccounts.provider, 'linear')
+          eq(integrationAccounts.provider, "linear")
         )
       );
   }

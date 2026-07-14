@@ -1,25 +1,25 @@
-import type { ConnectionState } from '@tooled-voice/shared';
+import type { ConnectionState } from "@tooled-voice/shared";
 import {
   type MediaStream,
   type MediaStreamTrack,
   mediaDevices,
   RTCPeerConnection,
   RTCSessionDescription,
-} from 'react-native-webrtc';
+} from "react-native-webrtc";
 import {
   ApiClientError,
   createRealtimeCredential,
   executeTool,
   finishConversation,
   persistConversationItem,
-} from '../api/client';
+} from "../api/client";
 import {
   type AudioRoute,
   type AudioSessionEvent,
   setSpeakerRoute,
   startAudioSession,
   stopAudioSession,
-} from './audio-session';
+} from "./audio-session";
 
 const nonRetryableConnectionErrorPattern =
   /MICROPHONE|PERMISSION|NOT.?ALLOWED|AUTH_REQUIRED|AUTH_INVALID/i;
@@ -46,7 +46,7 @@ type Listener = (event: {
   diagnostic?: VoiceDiagnostic;
   transcript?: {
     id: string;
-    role: 'user' | 'assistant';
+    role: "user" | "assistant";
     text: string;
     final: boolean;
   };
@@ -68,15 +68,15 @@ export class RealtimeClient {
   private microphone: MediaStreamTrack | undefined;
   private remote: MediaStream | undefined;
   private conversationId: string | undefined;
-  private toolApprovalPolicies: Record<string, 'ask' | 'automatic'> = {};
+  private toolApprovalPolicies: Record<string, "ask" | "automatic"> = {};
   private closed = false;
   private retries = 0;
   private responseActive = false;
   private userSpeaking = false;
   private desiredMuted = false;
   private speaker = true;
-  private route: AudioRoute = 'speaker';
-  private vadEagerness: 'auto' | 'high' = 'high';
+  private route: AudioRoute = "speaker";
+  private vadEagerness: "auto" | "high" = "high";
   private reconnecting = false;
   private openTimer: ReturnType<typeof setTimeout> | undefined;
   private statsTimer: ReturnType<typeof setInterval> | undefined;
@@ -111,14 +111,14 @@ export class RealtimeClient {
       ...(detail ? { detail } : {}),
     };
     console.info(
-      JSON.stringify({ scope: 'tooled-voice/realtime', ...diagnostic })
+      JSON.stringify({ scope: "tooled-voice/realtime", ...diagnostic })
     );
     this.listener({ diagnostic });
   }
   private audioEvent(event: AudioSessionEvent) {
     if (event.route) {
       this.route = event.route;
-      this.speaker = event.route === 'speaker';
+      this.speaker = event.route === "speaker";
       this.listener({ route: event.route, speaker: this.speaker });
     }
     this.diagnostic(event.event, undefined, event.detail);
@@ -126,23 +126,23 @@ export class RealtimeClient {
   async connect(reconnecting = false): Promise<void> {
     this.closed = false;
     this.connectStarted = performance.now();
-    this.diagnostic(reconnecting ? 'reconnect_started' : 'connect_started');
-    if (reconnecting) this.state('reconnecting');
+    this.diagnostic(reconnecting ? "reconnect_started" : "connect_started");
+    if (reconnecting) this.state("reconnecting");
     try {
       const credentialStarted = performance.now();
       const credential = await createRealtimeCredential(this.conversationId);
       this.conversationId = credential.conversationId;
       this.toolApprovalPolicies = credential.toolApprovalPolicies ?? {};
       this.diagnostic(
-        'credential_ready',
+        "credential_ready",
         performance.now() - credentialStarted,
         credential.model
       );
-      this.state('connecting');
+      this.state("connecting");
       const audioSessionStarted = performance.now();
       await startAudioSession((event) => this.audioEvent(event));
       this.diagnostic(
-        'native_audio_ready',
+        "native_audio_ready",
         performance.now() - audioSessionStarted
       );
       const microphoneStarted = performance.now();
@@ -152,11 +152,11 @@ export class RealtimeClient {
       });
       this.stream = stream;
       this.diagnostic(
-        'microphone_ready',
+        "microphone_ready",
         performance.now() - microphoneStarted
       );
       const [microphone] = stream.getAudioTracks();
-      if (!microphone) throw new Error('MICROPHONE_UNAVAILABLE');
+      if (!microphone) throw new Error("MICROPHONE_UNAVAILABLE");
       microphone.enabled = false;
       this.microphone = microphone;
       const pc = new RTCPeerConnection();
@@ -165,23 +165,23 @@ export class RealtimeClient {
         pc.addTrack(track, stream);
       });
       const pcEvents = pc as unknown as Events;
-      pcEvents.addEventListener('track', (event) => {
+      pcEvents.addEventListener("track", (event) => {
         this.remote = event.streams?.[0];
       });
-      pcEvents.addEventListener('connectionstatechange', () => {
+      pcEvents.addEventListener("connectionstatechange", () => {
         if (
           this.pc === pc &&
-          ['failed', 'disconnected'].includes(pc.connectionState)
+          ["failed", "disconnected"].includes(pc.connectionState)
         )
           void this.reconnect();
       });
-      const channel = pc.createDataChannel('oai-events') as unknown as Channel;
+      const channel = pc.createDataChannel("oai-events") as unknown as Channel;
       this.channel = channel;
       channel.addEventListener(
-        'message',
+        "message",
         (event) => void this.onEvent(event.data)
       );
-      channel.addEventListener('open', () => {
+      channel.addEventListener("open", () => {
         if (this.openTimer) clearTimeout(this.openTimer);
         this.openTimer = undefined;
         this.retries = 0;
@@ -193,50 +193,50 @@ export class RealtimeClient {
         });
         this.setVadEagerness(this.vadEagerness);
         this.diagnostic(
-          'channel_open',
+          "channel_open",
           performance.now() - this.connectStarted
         );
-        this.state('connected');
+        this.state("connected");
       });
-      channel.addEventListener('error', () => {
-        this.diagnostic('channel_error');
+      channel.addEventListener("error", () => {
+        this.diagnostic("channel_error");
         if (this.channel === channel) void this.reconnect();
       });
-      channel.addEventListener('close', () => {
-        this.diagnostic('channel_closed');
+      channel.addEventListener("close", () => {
+        this.diagnostic("channel_closed");
         if (this.channel === channel) void this.reconnect();
       });
       const negotiationStarted = performance.now();
       const offer = await pc.createOffer({ offerToReceiveAudio: true });
       await pc.setLocalDescription(offer);
-      const response = await fetch('https://api.openai.com/v1/realtime/calls', {
+      const response = await fetch("https://api.openai.com/v1/realtime/calls", {
         body: offer.sdp,
         headers: {
           Authorization: `Bearer ${credential.clientSecret}`,
-          'Content-Type': 'application/sdp',
+          "Content-Type": "application/sdp",
         },
-        method: 'POST',
+        method: "POST",
       });
       if (!response.ok)
         throw new Error(`WEBRTC_NEGOTIATION_${response.status}`);
       await pc.setRemoteDescription(
         new RTCSessionDescription({
           sdp: await response.text(),
-          type: 'answer',
+          type: "answer",
         })
       );
       this.diagnostic(
-        'webrtc_negotiated',
+        "webrtc_negotiated",
         performance.now() - negotiationStarted
       );
       this.openTimer = setTimeout(() => {
-        if (channel.readyState !== 'open') void this.reconnect();
+        if (channel.readyState !== "open") void this.reconnect();
       }, 15_000);
     } catch (error) {
       this.cleanup(false);
       if (isRetryableConnectionError(error) && this.retries < 4 && !this.closed)
         return this.retry();
-      this.fail(error instanceof Error ? error.message : 'CONNECTION_FAILED');
+      this.fail(error instanceof Error ? error.message : "CONNECTION_FAILED");
     }
   }
   setMuted(muted: boolean) {
@@ -249,7 +249,7 @@ export class RealtimeClient {
     setSpeakerRoute(speaker, (event) => this.audioEvent(event));
     this.listener({ route: this.route, speaker });
   }
-  setVadEagerness(eagerness: 'auto' | 'high') {
+  setVadEagerness(eagerness: "auto" | "high") {
     this.vadEagerness = eagerness;
     this.send({
       session: {
@@ -259,31 +259,31 @@ export class RealtimeClient {
               create_response: true,
               eagerness,
               interrupt_response: true,
-              type: 'semantic_vad',
+              type: "semantic_vad",
             },
           },
         },
-        type: 'realtime',
+        type: "realtime",
       },
-      type: 'session.update',
+      type: "session.update",
     });
-    this.diagnostic('vad_eagerness', undefined, eagerness);
+    this.diagnostic("vad_eagerness", undefined, eagerness);
   }
   respondToMcpApproval(approvalRequestId: string, approve: boolean) {
     this.send({
       item: {
         approval_request_id: approvalRequestId,
         approve,
-        type: 'mcp_approval_response',
-        ...(approve ? {} : { reason: 'The user declined this action.' }),
+        type: "mcp_approval_response",
+        ...(approve ? {} : { reason: "The user declined this action." }),
       },
-      type: 'conversation.item.create',
+      type: "conversation.item.create",
     });
     this.listener({ mcpApproval: null });
-    this.diagnostic(approve ? 'mcp_action_approved' : 'mcp_action_declined');
+    this.diagnostic(approve ? "mcp_action_approved" : "mcp_action_declined");
   }
   private send(event: Record<string, unknown>) {
-    if (this.channel?.readyState === 'open')
+    if (this.channel?.readyState === "open")
       this.channel.send(JSON.stringify(event));
   }
   private async inboundAudioBytes() {
@@ -292,9 +292,9 @@ export class RealtimeClient {
     let bytes = 0;
     stats.forEach((report: any) => {
       if (
-        report?.type === 'inbound-rtp' &&
-        (report.kind === 'audio' || report.mediaType === 'audio') &&
-        typeof report.bytesReceived === 'number'
+        report?.type === "inbound-rtp" &&
+        (report.kind === "audio" || report.mediaType === "audio") &&
+        typeof report.bytesReceived === "number"
       )
         bytes += report.bytesReceived;
     });
@@ -317,7 +317,7 @@ export class RealtimeClient {
         if (this.statsTimer) clearInterval(this.statsTimer);
         this.statsTimer = undefined;
         this.diagnostic(
-          'first_audio',
+          "first_audio",
           this.speechStoppedAt
             ? performance.now() - this.speechStoppedAt
             : undefined,
@@ -335,65 +335,65 @@ export class RealtimeClient {
   private persist(item: Parameters<typeof persistConversationItem>[1]) {
     if (this.conversationId)
       void persistConversationItem(this.conversationId, item).catch(() =>
-        this.listener({ error: 'HISTORY_PERSIST_FAILED' })
+        this.listener({ error: "HISTORY_PERSIST_FAILED" })
       );
   }
   private async onEvent(raw: unknown) {
-    if (typeof raw !== 'string') return;
+    if (typeof raw !== "string") return;
     let event: any;
     try {
       event = JSON.parse(raw);
     } catch {
       return;
     }
-    if (!event || typeof event.type !== 'string') return;
+    if (!event || typeof event.type !== "string") return;
     switch (event.type) {
-      case 'input_audio_buffer.speech_started':
-        if (this.responseActive) this.diagnostic('interruption_detected');
+      case "input_audio_buffer.speech_started":
+        if (this.responseActive) this.diagnostic("interruption_detected");
         this.userSpeaking = true;
-        this.diagnostic('speech_started');
-        this.state('listening');
+        this.diagnostic("speech_started");
+        this.state("listening");
         break;
-      case 'input_audio_buffer.speech_stopped':
+      case "input_audio_buffer.speech_stopped":
         this.userSpeaking = false;
         this.speechStoppedAt = performance.now();
-        this.diagnostic('speech_stopped');
-        this.state('thinking');
+        this.diagnostic("speech_stopped");
+        this.state("thinking");
         break;
-      case 'conversation.item.input_audio_transcription.delta':
-        this.transcriptDelta(event, 'user');
+      case "conversation.item.input_audio_transcription.delta":
+        this.transcriptDelta(event, "user");
         break;
-      case 'conversation.item.input_audio_transcription.completed':
-        this.transcriptDone(event, 'user');
+      case "conversation.item.input_audio_transcription.completed":
+        this.transcriptDone(event, "user");
         break;
-      case 'conversation.item.input_audio_transcription.failed':
-        this.diagnostic('transcription_failed', undefined, event.error?.code);
+      case "conversation.item.input_audio_transcription.failed":
+        this.diagnostic("transcription_failed", undefined, event.error?.code);
         this.listener({
           error:
-            typeof event.error?.code === 'string'
+            typeof event.error?.code === "string"
               ? event.error.code
-              : 'TRANSCRIPTION_FAILED',
+              : "TRANSCRIPTION_FAILED",
         });
         break;
-      case 'response.created':
+      case "response.created":
         this.responseActive = true;
         this.responseCreatedAt = performance.now();
         this.firstAudioSeen = false;
         void this.startResponseAudioMonitoring();
         this.diagnostic(
-          'response_created',
+          "response_created",
           this.speechStoppedAt
             ? this.responseCreatedAt - this.speechStoppedAt
             : undefined
         );
-        if (!this.userSpeaking) this.state('thinking');
+        if (!this.userSpeaking) this.state("thinking");
         break;
-      case 'response.audio.delta':
-      case 'response.output_audio.delta':
+      case "response.audio.delta":
+      case "response.output_audio.delta":
         if (!this.firstAudioSeen) {
           this.firstAudioSeen = true;
           this.diagnostic(
-            'first_audio',
+            "first_audio",
             this.speechStoppedAt
               ? performance.now() - this.speechStoppedAt
               : undefined,
@@ -402,87 +402,87 @@ export class RealtimeClient {
               : undefined
           );
         }
-        if (!this.userSpeaking) this.state('speaking');
+        if (!this.userSpeaking) this.state("speaking");
         break;
-      case 'response.output_audio_transcript.delta':
-        this.transcriptDelta(event, 'assistant');
+      case "response.output_audio_transcript.delta":
+        this.transcriptDelta(event, "assistant");
         break;
-      case 'response.audio_transcript.done':
-      case 'response.output_audio_transcript.done':
-        this.transcriptDone(event, 'assistant');
+      case "response.audio_transcript.done":
+      case "response.output_audio_transcript.done":
+        this.transcriptDone(event, "assistant");
         break;
-      case 'response.done':
+      case "response.done":
         this.responseActive = false;
         if (this.statsTimer) clearInterval(this.statsTimer);
         this.statsTimer = undefined;
         this.diagnostic(
-          'response_done',
+          "response_done",
           this.responseCreatedAt
             ? performance.now() - this.responseCreatedAt
             : undefined,
           event.response?.status
         );
-        this.state(this.userSpeaking ? 'listening' : 'connected');
+        this.state(this.userSpeaking ? "listening" : "connected");
         break;
-      case 'response.function_call_arguments.done':
+      case "response.function_call_arguments.done":
         await this.handleTool(event);
         break;
-      case 'mcp_list_tools.in_progress':
-        this.diagnostic('linear_tools_loading');
+      case "mcp_list_tools.in_progress":
+        this.diagnostic("linear_tools_loading");
         break;
-      case 'mcp_list_tools.completed':
-        this.diagnostic('linear_tools_ready');
+      case "mcp_list_tools.completed":
+        this.diagnostic("linear_tools_ready");
         break;
-      case 'mcp_list_tools.failed':
-        this.diagnostic('linear_tools_failed');
-        this.listener({ error: 'LINEAR_TOOLS_UNAVAILABLE' });
+      case "mcp_list_tools.failed":
+        this.diagnostic("linear_tools_failed");
+        this.listener({ error: "LINEAR_TOOLS_UNAVAILABLE" });
         break;
-      case 'conversation.item.done':
+      case "conversation.item.done":
         this.handleMcpItem(event.item);
         break;
-      case 'response.mcp_call.in_progress':
+      case "response.mcp_call.in_progress":
         if (
-          typeof event.item_id === 'string' &&
+          typeof event.item_id === "string" &&
           !this.mcpStarted.has(event.item_id)
         )
           this.mcpStarted.set(event.item_id, performance.now());
         break;
-      case 'response.mcp_call_arguments.done':
+      case "response.mcp_call_arguments.done":
         this.handleMcpArguments(event);
         break;
-      case 'response.mcp_call.failed':
+      case "response.mcp_call.failed":
         this.handleMcpFailure(event);
         break;
-      case 'response.output_item.done':
-        if (event.item?.type === 'mcp_call') this.handleMcpResult(event.item);
+      case "response.output_item.done":
+        if (event.item?.type === "mcp_call") this.handleMcpResult(event.item);
         break;
-      case 'error':
-        this.diagnostic('realtime_error', undefined, event.error?.code);
+      case "error":
+        this.diagnostic("realtime_error", undefined, event.error?.code);
         this.listener({
           error:
-            typeof event.error?.code === 'string'
+            typeof event.error?.code === "string"
               ? event.error.code
-              : 'REALTIME_ERROR',
+              : "REALTIME_ERROR",
         });
         break;
       default:
         break;
     }
   }
-  private transcriptDelta(event: any, role: 'user' | 'assistant') {
-    if (typeof event.item_id !== 'string' || typeof event.delta !== 'string')
+  private transcriptDelta(event: any, role: "user" | "assistant") {
+    if (typeof event.item_id !== "string" || typeof event.delta !== "string")
       return;
     const text =
-      (this.streamingTranscripts.get(event.item_id) ?? '') + event.delta;
+      (this.streamingTranscripts.get(event.item_id) ?? "") + event.delta;
     this.streamingTranscripts.set(event.item_id, text);
     this.listener({
       transcript: { final: false, id: event.item_id, role, text },
     });
   }
-  private transcriptDone(event: any, role: 'user' | 'assistant') {
+  private transcriptDone(event: any, role: "user" | "assistant") {
     if (
-      typeof event.item_id !== 'string' ||
-      typeof event.transcript !== 'string'
+      typeof event.item_id !== "string" ||
+      typeof event.transcript !== "string"
     )
       return;
     const transcript = event.transcript.trim();
@@ -490,18 +490,18 @@ export class RealtimeClient {
     this.listener({
       transcript: { final: true, id: event.item_id, role, text: transcript },
     });
-    if (transcript) this.persist({ kind: 'transcript', role, transcript });
+    if (transcript) this.persist({ kind: "transcript", role, transcript });
   }
   private async handleTool(event: any) {
     if (
-      typeof event.call_id !== 'string' ||
-      typeof event.name !== 'string' ||
-      typeof event.arguments !== 'string'
+      typeof event.call_id !== "string" ||
+      typeof event.name !== "string" ||
+      typeof event.arguments !== "string"
     )
       return;
-    this.state('thinking');
+    this.state("thinking");
     const started = performance.now();
-    this.diagnostic('tool_started', undefined, event.name);
+    this.diagnostic("tool_started", undefined, event.name);
     let args: unknown;
     try {
       args = JSON.parse(event.arguments);
@@ -510,9 +510,9 @@ export class RealtimeClient {
     }
     this.persist({
       callId: event.call_id,
-      kind: 'tool_call',
+      kind: "tool_call",
       payload: { arguments: args, tool: event.name },
-      role: 'tool',
+      role: "tool",
     });
     let output: unknown;
     try {
@@ -527,132 +527,132 @@ export class RealtimeClient {
         callId: event.call_id,
         error: {
           code:
-            error instanceof ApiClientError ? error.code : 'TOOL_BRIDGE_FAILED',
+            error instanceof ApiClientError ? error.code : "TOOL_BRIDGE_FAILED",
           message:
             error instanceof ApiClientError
               ? error.message
-              : 'The tool request failed',
+              : "The tool request failed",
           retryable: error instanceof ApiClientError && error.retryable,
         },
         ok: false,
       };
     }
-    this.diagnostic('tool_finished', performance.now() - started, event.name);
+    this.diagnostic("tool_finished", performance.now() - started, event.name);
     this.persist({
       callId: event.call_id,
-      kind: 'tool_result',
+      kind: "tool_result",
       payload: output,
-      role: 'tool',
+      role: "tool",
     });
     this.send({
       item: {
         call_id: event.call_id,
         output: JSON.stringify(output),
-        type: 'function_call_output',
+        type: "function_call_output",
       },
-      type: 'conversation.item.create',
+      type: "conversation.item.create",
     });
-    this.send({ type: 'response.create' });
+    this.send({ type: "response.create" });
   }
   private handleMcpItem(item: any) {
-    if (!item || typeof item.type !== 'string') return;
-    if (item.type === 'mcp_list_tools') {
+    if (!item || typeof item.type !== "string") return;
+    if (item.type === "mcp_list_tools") {
       const count = Array.isArray(item.tools) ? item.tools.length : undefined;
       this.diagnostic(
-        'mcp_tools_available',
+        "mcp_tools_available",
         undefined,
         count === undefined ? undefined : String(count)
       );
       return;
     }
     if (
-      item.type !== 'mcp_approval_request' ||
-      typeof item.id !== 'string' ||
-      typeof item.name !== 'string'
+      item.type !== "mcp_approval_request" ||
+      typeof item.id !== "string" ||
+      typeof item.name !== "string"
     )
       return;
     const approval = {
-      arguments: typeof item.arguments === 'string' ? item.arguments : '{}',
+      arguments: typeof item.arguments === "string" ? item.arguments : "{}",
       id: item.id,
       name: item.name,
       serverLabel:
-        typeof item.server_label === 'string' ? item.server_label : 'mcp',
+        typeof item.server_label === "string" ? item.server_label : "mcp",
     };
-    const toolkit = item.name.split('_')[0]?.toLowerCase();
+    const toolkit = item.name.split("_")[0]?.toLowerCase();
     if (
       isReadOnlyMcpTool(item.name) ||
-      (toolkit && this.toolApprovalPolicies[toolkit] === 'automatic')
+      (toolkit && this.toolApprovalPolicies[toolkit] === "automatic")
     ) {
-      this.diagnostic('mcp_auto_approved', undefined, item.name);
+      this.diagnostic("mcp_auto_approved", undefined, item.name);
       this.respondToMcpApproval(item.id, true);
     } else {
-      this.state('thinking');
-      this.diagnostic('mcp_approval_required', undefined, item.name);
+      this.state("thinking");
+      this.diagnostic("mcp_approval_required", undefined, item.name);
       this.listener({ mcpApproval: approval });
     }
   }
   private handleMcpArguments(event: any) {
-    if (typeof event.item_id !== 'string' || typeof event.name !== 'string')
+    if (typeof event.item_id !== "string" || typeof event.name !== "string")
       return;
     this.mcpStarted.set(event.item_id, performance.now());
     const args = parseJson(event.arguments);
-    this.diagnostic('tool_started', undefined, event.name);
+    this.diagnostic("tool_started", undefined, event.name);
     this.persist({
       callId: event.item_id,
-      kind: 'tool_call',
+      kind: "tool_call",
       payload: {
         arguments: args,
         provider:
-          typeof event.server_label === 'string' ? event.server_label : 'mcp',
+          typeof event.server_label === "string" ? event.server_label : "mcp",
         tool: event.name,
       },
-      role: 'tool',
+      role: "tool",
     });
   }
   private handleMcpFailure(event: any) {
-    if (typeof event.item_id !== 'string') return;
+    if (typeof event.item_id !== "string") return;
     const started = this.mcpStarted.get(event.item_id);
     this.mcpStarted.delete(event.item_id);
     this.diagnostic(
-      'tool_finished',
+      "tool_finished",
       started === undefined ? undefined : performance.now() - started,
-      'linear_failed'
+      "linear_failed"
     );
     this.persist({
       callId: event.item_id,
-      kind: 'tool_result',
+      kind: "tool_result",
       payload: {
-        error: event.error ?? { code: 'LINEAR_TOOL_FAILED' },
+        error: event.error ?? { code: "LINEAR_TOOL_FAILED" },
         ok: false,
       },
-      role: 'tool',
+      role: "tool",
     });
-    this.listener({ error: 'LINEAR_TOOL_FAILED' });
+    this.listener({ error: "LINEAR_TOOL_FAILED" });
   }
   private handleMcpResult(item: any) {
-    if (typeof item.id !== 'string') return;
+    if (typeof item.id !== "string") return;
     const started = this.mcpStarted.get(item.id);
     this.mcpStarted.delete(item.id);
     this.diagnostic(
-      'tool_finished',
+      "tool_finished",
       started === undefined ? undefined : performance.now() - started,
-      typeof item.name === 'string' ? item.name : 'mcp'
+      typeof item.name === "string" ? item.name : "mcp"
     );
     this.persist({
       callId: item.id,
-      kind: 'tool_result',
+      kind: "tool_result",
       payload: {
         ok: true,
         provider:
-          typeof item.server_label === 'string' ? item.server_label : 'mcp',
+          typeof item.server_label === "string" ? item.server_label : "mcp",
         result: parseJson(item.output),
       },
-      role: 'tool',
+      role: "tool",
     });
   }
   private async retry() {
     this.retries += 1;
-    this.state('reconnecting');
+    this.state("reconnecting");
     await new Promise((resolve) =>
       setTimeout(
         resolve,
@@ -664,7 +664,7 @@ export class RealtimeClient {
   private async reconnect() {
     if (this.closed || this.reconnecting) return;
     if (this.retries >= 4) {
-      this.fail('RECONNECT_EXHAUSTED');
+      this.fail("RECONNECT_EXHAUSTED");
       return;
     }
     this.reconnecting = true;
@@ -683,18 +683,18 @@ export class RealtimeClient {
       this.listener({ muted: false });
     }
     if (complete && this.conversationId) {
-      void finishConversation(this.conversationId, 'completed').catch(() =>
-        this.listener({ error: 'HISTORY_PERSIST_FAILED' })
+      void finishConversation(this.conversationId, "completed").catch(() =>
+        this.listener({ error: "HISTORY_PERSIST_FAILED" })
       );
       this.conversationId = undefined;
     }
-    this.state('disconnected');
+    this.state("disconnected");
   }
   private fail(message: string) {
-    this.state('error');
+    this.state("error");
     this.listener({ error: message });
     if (this.conversationId)
-      void finishConversation(this.conversationId, 'failed').catch(
+      void finishConversation(this.conversationId, "failed").catch(
         () => undefined
       );
   }
@@ -744,7 +744,7 @@ function isReadOnlyMcpTool(name: string) {
   return readOnlyMcpToolPattern.test(name);
 }
 function parseJson(value: unknown): unknown {
-  if (typeof value !== 'string') return value;
+  if (typeof value !== "string") return value;
   try {
     return JSON.parse(value);
   } catch {

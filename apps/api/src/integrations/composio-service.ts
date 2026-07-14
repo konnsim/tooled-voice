@@ -1,14 +1,14 @@
-import { createHmac } from 'node:crypto';
-import { Composio } from '@composio/core';
-import { ApiError } from '../errors/api-error.js';
+import { createHmac } from "node:crypto";
+import { Composio } from "@composio/core";
+import { ApiError } from "../errors/api-error.js";
 
 const toolkitSlugPattern = /^[a-z0-9][a-z0-9_-]{0,79}$/;
 export const composioToolkits = [
-  'linear',
-  'github',
-  'gmail',
-  'slack',
-  'notion',
+  "linear",
+  "github",
+  "gmail",
+  "slack",
+  "notion",
 ] as const;
 export type ComposioToolkit = string;
 export interface ComposioConnection {
@@ -20,7 +20,7 @@ export interface ComposioConnection {
   toolsCount?: number;
 }
 export interface ToolSetting {
-  approvalPolicy?: 'ask' | 'automatic';
+  approvalPolicy?: "ask" | "automatic";
   connectedAccountIds?: string[];
   disabledTools?: string[];
   enabled?: boolean;
@@ -93,11 +93,11 @@ export class ComposioService {
   async accounts(userId: string, signal: AbortSignal) {
     if (!this.client) return [];
     const result = await this.client.connectedAccounts.list(
-      { limit: 100, orderBy: 'updated_at', userIds: [userId] },
+      { limit: 100, orderBy: "updated_at", userIds: [userId] },
       { signal }
     );
     return result.items.map((account) => ({
-      active: account.status === 'ACTIVE' && !account.isDisabled,
+      active: account.status === "ACTIVE" && !account.isDisabled,
       alias: account.alias ?? undefined,
       createdAt: account.createdAt,
       id: account.id,
@@ -119,7 +119,7 @@ export class ComposioService {
       item.function?.name
         ? [
             {
-              description: item.function.description ?? '',
+              description: item.function.description ?? "",
               slug: item.function.name,
             },
           ]
@@ -143,7 +143,7 @@ export class ComposioService {
     });
     if (!connection.redirectUrl)
       throw new ApiError(
-        'INTEGRATION_UNAVAILABLE',
+        "INTEGRATION_UNAVAILABLE",
         `${toolkitName(toolkit)} did not return a connection link`,
         502,
         false
@@ -171,7 +171,7 @@ export class ComposioService {
   async setAccountState(
     userId: string,
     accountId: string,
-    action: 'enable' | 'disable' | 'refresh',
+    action: "enable" | "disable" | "refresh",
     signal: AbortSignal
   ) {
     const client = this.required();
@@ -181,13 +181,13 @@ export class ComposioService {
     );
     if (!owned.items.some((account) => account.id === accountId))
       throw new ApiError(
-        'PERMISSION_DENIED',
-        'That connection does not belong to this user',
+        "PERMISSION_DENIED",
+        "That connection does not belong to this user",
         403,
         false
       );
-    if (action === 'enable') await client.connectedAccounts.enable(accountId);
-    else if (action === 'refresh')
+    if (action === "enable") await client.connectedAccounts.enable(accountId);
+    else if (action === "refresh")
       await client.connectedAccounts.refresh(accountId);
     else await client.connectedAccounts.disable(accountId);
   }
@@ -224,17 +224,17 @@ export class ComposioService {
     const target = session.mcp.url;
     const signature = signComposioTarget(target, this.apiKey);
     const base =
-      process.env.PUBLIC_API_URL ?? 'https://tooled-voice-api.vercel.app';
-    const url = new URL('/api/mcp/composio', base);
-    url.searchParams.set('target', target);
-    url.searchParams.set('signature', signature);
+      process.env.PUBLIC_API_URL ?? "https://tooled-voice-api.vercel.app";
+    const url = new URL("/api/mcp/composio", base);
+    url.searchParams.set("target", target);
+    url.searchParams.set("signature", signature);
     return { authorization: this.apiKey, url: url.toString() };
   }
   private required() {
     if (!this.client)
       throw new ApiError(
-        'INTEGRATION_UNAVAILABLE',
-        'Composio is not configured',
+        "INTEGRATION_UNAVAILABLE",
+        "Composio is not configured",
         503,
         false
       );
@@ -248,5 +248,5 @@ export function parseComposioToolkit(value: string): ComposioToolkit | null {
   return toolkitSlugPattern.test(value) ? value : null;
 }
 export function signComposioTarget(target: string, key: string) {
-  return createHmac('sha256', key).update(target).digest('base64url');
+  return createHmac("sha256", key).update(target).digest("base64url");
 }

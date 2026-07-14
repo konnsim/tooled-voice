@@ -1,12 +1,12 @@
-import { serve } from '@hono/node-server';
-import { createApp } from './http/app.js';
+import { serve } from "@hono/node-server";
+import { createApp } from "./http/app.js";
 
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65_535)
-  throw new Error('PORT must be a valid TCP port');
+  throw new Error("PORT must be a valid TCP port");
 
 const server = serve(
-  { fetch: createApp().fetch, hostname: '0.0.0.0', port },
+  { fetch: createApp().fetch, hostname: "0.0.0.0", port },
   (info) => {
     console.info(`Tooled Voice API listening on http://localhost:${info.port}`);
   }
@@ -22,5 +22,5 @@ function shutdown(signal: string) {
   });
 }
 
-process.once('SIGINT', () => shutdown('SIGINT'));
-process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once("SIGINT", () => shutdown("SIGINT"));
+process.once("SIGTERM", () => shutdown("SIGTERM"));

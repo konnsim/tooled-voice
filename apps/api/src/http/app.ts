@@ -1,32 +1,32 @@
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import {
   conversationItemInputSchema,
   conversationStatusInputSchema,
   toolCallRequestSchema,
-} from '@tooled-voice/shared';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
-import { Hono } from 'hono';
-import { verifyAccessToken } from '../auth/verify-access-token.js';
-import { createDatabase } from '../database/client.js';
+} from "@tooled-voice/shared";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { Hono } from "hono";
+import { verifyAccessToken } from "../auth/verify-access-token.js";
+import { createDatabase } from "../database/client.js";
 import {
   conversationItems,
   conversations,
   userProfiles,
-} from '../database/schema.js';
-import { normalizeError } from '../errors/api-error.js';
-import type { ToolSettings } from '../integrations/composio-service.js';
+} from "../database/schema.js";
+import { normalizeError } from "../errors/api-error.js";
+import type { ToolSettings } from "../integrations/composio-service.js";
 import {
   ComposioService,
   parseComposioToolkit,
   signComposioTarget,
-} from '../integrations/composio-service.js';
+} from "../integrations/composio-service.js";
 import {
   LinearService,
   linearMobileRedirectUri,
-} from '../integrations/linear-service.js';
-import { logger } from '../logging/logger.js';
-import { createRealtimeSession } from '../realtime/create-session.js';
-import { dispatchTool } from '../tools/dispatch.js';
+} from "../integrations/linear-service.js";
+import { logger } from "../logging/logger.js";
+import { createRealtimeSession } from "../realtime/create-session.js";
+import { dispatchTool } from "../tools/dispatch.js";
 
 const bearerPrefixPattern = /^Bearer\s+/i;
 type Variables = {
@@ -37,86 +37,86 @@ export function createApp(database = createDatabase()) {
   const app = new Hono<{ Variables: Variables }>();
   const linear = new LinearService(database);
   const composio = new ComposioService();
-  app.get('/auth/confirmed', (c) =>
+  app.get("/auth/confirmed", (c) =>
     c.html(
       '<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="/favicon.png"><title>Account confirmed</title><body style="background:#11130e;color:#f0f1e8;font:16px system-ui;margin:0;display:grid;min-height:100vh;place-items:center"><main style="padding:32px;max-width:520px"><img src="/icon.png" width="96" height="96" alt="Tooled Voice" style="border-radius:22px"><p style="color:#e8ff58;font-weight:800;letter-spacing:.16em">TOOLED / VOICE</p><h1>Account confirmed.</h1><p>You can return to the Tooled Voice app and sign in.</p></main></body></html>'
     )
   );
-  app.get('/oauth/linear/callback', async (c) => {
+  app.get("/oauth/linear/callback", async (c) => {
     const redirect = new URL(linearMobileRedirectUri());
-    const providerError = c.req.query('error');
-    const code = c.req.query('code');
-    const state = c.req.query('state');
+    const providerError = c.req.query("error");
+    const code = c.req.query("code");
+    const state = c.req.query("state");
     if (providerError || !code || !state) {
-      redirect.searchParams.set('status', 'error');
+      redirect.searchParams.set("status", "error");
       redirect.searchParams.set(
-        'code',
-        providerError ?? 'OAUTH_INVALID_CALLBACK'
+        "code",
+        providerError ?? "OAUTH_INVALID_CALLBACK"
       );
       return c.redirect(redirect.toString());
     }
     try {
       await linear.completeAuthorization(code, state, c.req.raw.signal);
-      redirect.searchParams.set('status', 'connected');
+      redirect.searchParams.set("status", "connected");
     } catch (error) {
       const normalized = normalizeError(error);
       logger.error(
-        { errorCode: normalized.code, provider: 'linear' },
-        'OAuth callback failed'
+        { errorCode: normalized.code, provider: "linear" },
+        "OAuth callback failed"
       );
-      redirect.searchParams.set('status', 'error');
-      redirect.searchParams.set('code', normalized.code);
+      redirect.searchParams.set("status", "error");
+      redirect.searchParams.set("code", normalized.code);
     }
     return c.redirect(redirect.toString());
   });
-  app.get('/api/health', async (c) => {
+  app.get("/api/health", async (c) => {
     try {
       await database.execute(sql`select 1`);
-      return c.json({ database: 'connected', ok: true });
+      return c.json({ database: "connected", ok: true });
     } catch {
-      return c.json({ database: 'unavailable', ok: false }, 503);
+      return c.json({ database: "unavailable", ok: false }, 503);
     }
   });
-  app.all('/api/mcp/composio', async (c) => {
-    const authorization = c.req.header('authorization');
-    const apiKey = authorization?.replace(bearerPrefixPattern, '');
-    const target = c.req.query('target');
-    const signature = c.req.query('signature');
+  app.all("/api/mcp/composio", async (c) => {
+    const authorization = c.req.header("authorization");
+    const apiKey = authorization?.replace(bearerPrefixPattern, "");
+    const target = c.req.query("target");
+    const signature = c.req.query("signature");
     if (!(apiKey && target && signature))
-      return c.json({ error: 'Unauthorized' }, 401);
+      return c.json({ error: "Unauthorized" }, 401);
     let url: URL;
     try {
       url = new URL(target);
     } catch {
-      return c.json({ error: 'Invalid target' }, 400);
+      return c.json({ error: "Invalid target" }, 400);
     }
-    if (url.protocol !== 'https:' || url.hostname !== 'backend.composio.dev')
-      return c.json({ error: 'Invalid target' }, 400);
+    if (url.protocol !== "https:" || url.hostname !== "backend.composio.dev")
+      return c.json({ error: "Invalid target" }, 400);
     const expected = signComposioTarget(target, apiKey);
     const supplied = Buffer.from(signature);
     const valid =
       supplied.length === Buffer.byteLength(expected) &&
       timingSafeEqual(supplied, Buffer.from(expected));
-    if (!valid) return c.json({ error: 'Unauthorized' }, 401);
+    if (!valid) return c.json({ error: "Unauthorized" }, 401);
     const headers = new Headers({
-      Accept: c.req.header('accept') ?? 'application/json, text/event-stream',
-      'Content-Type': c.req.header('content-type') ?? 'application/json',
-      'x-api-key': apiKey,
+      Accept: c.req.header("accept") ?? "application/json, text/event-stream",
+      "Content-Type": c.req.header("content-type") ?? "application/json",
+      "x-api-key": apiKey,
     });
-    for (const name of ['mcp-session-id', 'last-event-id']) {
+    for (const name of ["mcp-session-id", "last-event-id"]) {
       const value = c.req.header(name);
       if (value) headers.set(name, value);
     }
-    const hasBody = !['GET', 'HEAD'].includes(c.req.method);
+    const hasBody = !["GET", "HEAD"].includes(c.req.method);
     const response = await fetch(url, {
       headers,
       method: c.req.method,
       ...(hasBody ? { body: Buffer.from(await c.req.arrayBuffer()) } : {}),
-      redirect: 'error',
+      redirect: "error",
       signal: c.req.raw.signal,
     });
     const outgoing = new Headers();
-    for (const name of ['content-type', 'mcp-session-id', 'retry-after']) {
+    for (const name of ["content-type", "mcp-session-id", "retry-after"]) {
       const value = response.headers.get(name);
       if (value) outgoing.set(name, value);
     }
@@ -125,12 +125,12 @@ export function createApp(database = createDatabase()) {
       status: response.status,
     });
   });
-  app.use('/api/*', async (c, next) => {
-    const requestId = c.req.header('x-request-id') ?? randomUUID();
-    c.set('requestId', requestId);
-    c.header('x-request-id', requestId);
+  app.use("/api/*", async (c, next) => {
+    const requestId = c.req.header("x-request-id") ?? randomUUID();
+    c.set("requestId", requestId);
+    c.header("x-request-id", requestId);
     try {
-      c.set('user', await verifyAccessToken(c.req.header('authorization')));
+      c.set("user", await verifyAccessToken(c.req.header("authorization")));
       await next();
     } catch (error) {
       const normalized = normalizeError(error);
@@ -147,7 +147,7 @@ export function createApp(database = createDatabase()) {
       );
     }
   });
-  app.post('/api/realtime/session', async (c) => {
+  app.post("/api/realtime/session", async (c) => {
     const started = Date.now();
     try {
       const userId = c.var.user.id;
@@ -167,9 +167,9 @@ export function createApp(database = createDatabase()) {
         .where(eq(userProfiles.id, userId))
         .limit(1);
       const approvalPolicy =
-        profile?.toolApprovalPolicy === 'automatic'
-          ? ('automatic' as const)
-          : ('ask' as const);
+        profile?.toolApprovalPolicy === "automatic"
+          ? ("automatic" as const)
+          : ("ask" as const);
       const toolSettings = (profile?.toolSettings ?? {}) as ToolSettings;
       const composioMcp = await composio.mcp(
         userId,
@@ -183,15 +183,15 @@ export function createApp(database = createDatabase()) {
         ? {
             approvalPolicy,
             authorization: composioMcp.authorization,
-            label: 'composio',
+            label: "composio",
             url: composioMcp.url,
           }
         : linearConnection
           ? {
               approvalPolicy,
               authorization: linearConnection.accessToken,
-              label: 'linear',
-              url: 'https://mcp.linear.app/mcp',
+              label: "linear",
+              url: "https://mcp.linear.app/mcp",
             }
           : undefined;
       const session = await createRealtimeSession(
@@ -200,7 +200,7 @@ export function createApp(database = createDatabase()) {
         mcpConnection
       );
       let conversationId: string | undefined;
-      if (typeof body.conversationId === 'string') {
+      if (typeof body.conversationId === "string") {
         const owned = await database
           .select({ id: conversations.id })
           .from(conversations)
@@ -208,7 +208,7 @@ export function createApp(database = createDatabase()) {
             and(
               eq(conversations.id, body.conversationId),
               eq(conversations.userId, userId),
-              eq(conversations.status, 'active')
+              eq(conversations.status, "active")
             )
           )
           .limit(1);
@@ -234,17 +234,17 @@ export function createApp(database = createDatabase()) {
           conversationId,
           durationMs: Date.now() - started,
           mcpProvider: composioMcp
-            ? 'composio'
+            ? "composio"
             : linearConnection
-              ? 'linear'
+              ? "linear"
               : undefined,
           realtimeSessionId: session.sessionId,
           requestId: c.var.requestId,
-          status: 'succeeded',
+          status: "succeeded",
           toolApprovalPolicy: approvalPolicy,
           userId,
         },
-        'Realtime session created'
+        "Realtime session created"
       );
       return c.json({
         ...session,
@@ -263,10 +263,10 @@ export function createApp(database = createDatabase()) {
           durationMs: Date.now() - started,
           errorCode: e.code,
           requestId: c.var.requestId,
-          status: 'failed',
+          status: "failed",
           userId: c.var.user.id,
         },
-        'Realtime session failed'
+        "Realtime session failed"
       );
       return c.json(
         {
@@ -277,7 +277,7 @@ export function createApp(database = createDatabase()) {
       );
     }
   });
-  app.get('/api/integrations', async (c) => {
+  app.get("/api/integrations", async (c) => {
     const userId = c.var.user.id;
     await database
       .insert(userProfiles)
@@ -298,37 +298,37 @@ export function createApp(database = createDatabase()) {
     ]);
     if (legacyLinear?.connected) {
       const item = connections.find(
-        (connection) => connection.slug === 'linear'
+        (connection) => connection.slug === "linear"
       );
       if (item) item.connected = true;
     }
     return c.json({
       accounts,
       approvalPolicy:
-        profile[0]?.toolApprovalPolicy === 'automatic' ? 'automatic' : 'ask',
+        profile[0]?.toolApprovalPolicy === "automatic" ? "automatic" : "ask",
       configured: composio.configured,
       connections,
       settings: profile[0]?.toolSettings ?? {},
     });
   });
-  app.get('/api/integrations/catalog', async (c) =>
+  app.get("/api/integrations/catalog", async (c) =>
     c.json(
       await composio.catalog(
         c.var.user.id,
-        c.req.query('search') || undefined,
-        c.req.query('cursor') || undefined,
+        c.req.query("search") || undefined,
+        c.req.query("cursor") || undefined,
         c.req.raw.signal
       )
     )
   );
-  app.get('/api/integrations/:toolkit/tools', async (c) => {
-    const toolkit = parseComposioToolkit(c.req.param('toolkit'));
+  app.get("/api/integrations/:toolkit/tools", async (c) => {
+    const toolkit = parseComposioToolkit(c.req.param("toolkit"));
     if (!toolkit)
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Unknown integration',
+            code: "INVALID_REQUEST",
+            message: "Unknown integration",
             retryable: false,
           },
           ok: false,
@@ -339,8 +339,8 @@ export function createApp(database = createDatabase()) {
       tools: await composio.tools(c.var.user.id, toolkit, c.req.raw.signal),
     });
   });
-  app.put('/api/integrations/:toolkit/preferences', async (c) => {
-    const toolkit = parseComposioToolkit(c.req.param('toolkit'));
+  app.put("/api/integrations/:toolkit/preferences", async (c) => {
+    const toolkit = parseComposioToolkit(c.req.param("toolkit"));
     const body = (await c.req.json().catch(() => null)) as {
       enabled?: unknown;
       approvalPolicy?: unknown;
@@ -349,18 +349,18 @@ export function createApp(database = createDatabase()) {
     } | null;
     if (
       !(toolkit && body) ||
-      typeof body.enabled !== 'boolean' ||
-      (body.approvalPolicy !== 'ask' && body.approvalPolicy !== 'automatic') ||
+      typeof body.enabled !== "boolean" ||
+      (body.approvalPolicy !== "ask" && body.approvalPolicy !== "automatic") ||
       !Array.isArray(body.connectedAccountIds) ||
-      !body.connectedAccountIds.every((value) => typeof value === 'string') ||
+      !body.connectedAccountIds.every((value) => typeof value === "string") ||
       !Array.isArray(body.disabledTools) ||
-      !body.disabledTools.every((value) => typeof value === 'string')
+      !body.disabledTools.every((value) => typeof value === "string")
     )
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid tool preferences',
+            code: "INVALID_REQUEST",
+            message: "Invalid tool preferences",
             retryable: false,
           },
           ok: false,
@@ -385,14 +385,14 @@ export function createApp(database = createDatabase()) {
       });
     return c.json({ settings });
   });
-  app.post('/api/integrations/accounts/:id/:action', async (c) => {
-    const action = c.req.param('action');
-    if (action !== 'enable' && action !== 'disable' && action !== 'refresh')
+  app.post("/api/integrations/accounts/:id/:action", async (c) => {
+    const action = c.req.param("action");
+    if (action !== "enable" && action !== "disable" && action !== "refresh")
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid account action',
+            code: "INVALID_REQUEST",
+            message: "Invalid account action",
             retryable: false,
           },
           ok: false,
@@ -401,66 +401,66 @@ export function createApp(database = createDatabase()) {
       );
     await composio.setAccountState(
       c.var.user.id,
-      c.req.param('id'),
+      c.req.param("id"),
       action,
       c.req.raw.signal
     );
     return c.json({ ok: true });
   });
-  app.post('/api/integrations/:toolkit/connect', async (c) => {
-    const toolkit = parseComposioToolkit(c.req.param('toolkit'));
+  app.post("/api/integrations/:toolkit/connect", async (c) => {
+    const toolkit = parseComposioToolkit(c.req.param("toolkit"));
     if (!toolkit)
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Unknown integration',
+            code: "INVALID_REQUEST",
+            message: "Unknown integration",
             retryable: false,
           },
           ok: false,
         },
         400
       );
-    if (!composio.configured && toolkit === 'linear')
+    if (!composio.configured && toolkit === "linear")
       return c.json(await linear.createAuthorization(c.var.user.id));
     return c.json(
       await composio.connect(
         c.var.user.id,
         toolkit,
-        'tooledvoice://integrations/composio',
+        "tooledvoice://integrations/composio",
         c.req.raw.signal
       )
     );
   });
-  app.delete('/api/integrations/:toolkit', async (c) => {
-    const toolkit = parseComposioToolkit(c.req.param('toolkit'));
+  app.delete("/api/integrations/:toolkit", async (c) => {
+    const toolkit = parseComposioToolkit(c.req.param("toolkit"));
     if (!toolkit)
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Unknown integration',
+            code: "INVALID_REQUEST",
+            message: "Unknown integration",
             retryable: false,
           },
           ok: false,
         },
         400
       );
-    if (!composio.configured && toolkit === 'linear')
+    if (!composio.configured && toolkit === "linear")
       await linear.disconnect(c.var.user.id, c.req.raw.signal);
     else await composio.disconnect(c.var.user.id, toolkit, c.req.raw.signal);
     return c.body(null, 204);
   });
-  app.put('/api/integrations/approval-policy', async (c) => {
+  app.put("/api/integrations/approval-policy", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {
       approvalPolicy?: unknown;
     } | null;
-    if (body?.approvalPolicy !== 'ask' && body?.approvalPolicy !== 'automatic')
+    if (body?.approvalPolicy !== "ask" && body?.approvalPolicy !== "automatic")
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid tool permission level',
+            code: "INVALID_REQUEST",
+            message: "Invalid tool permission level",
             retryable: false,
           },
           ok: false,
@@ -476,22 +476,22 @@ export function createApp(database = createDatabase()) {
       });
     return c.json({ approvalPolicy: body.approvalPolicy });
   });
-  app.post('/api/integrations/linear/connect', async (c) =>
+  app.post("/api/integrations/linear/connect", async (c) =>
     c.json(await linear.createAuthorization(c.var.user.id))
   );
-  app.get('/api/integrations/linear/status', async (c) =>
+  app.get("/api/integrations/linear/status", async (c) =>
     c.json(await linear.status(c.var.user.id))
   );
-  app.put('/api/integrations/linear/approval-policy', async (c) => {
+  app.put("/api/integrations/linear/approval-policy", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {
       approvalPolicy?: unknown;
     } | null;
-    if (body?.approvalPolicy !== 'ask' && body?.approvalPolicy !== 'automatic')
+    if (body?.approvalPolicy !== "ask" && body?.approvalPolicy !== "automatic")
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid Linear permission level',
+            code: "INVALID_REQUEST",
+            message: "Invalid Linear permission level",
             retryable: false,
           },
           ok: false,
@@ -501,11 +501,11 @@ export function createApp(database = createDatabase()) {
     await linear.setApprovalPolicy(c.var.user.id, body.approvalPolicy);
     return c.json(await linear.status(c.var.user.id));
   });
-  app.delete('/api/integrations/linear', async (c) => {
+  app.delete("/api/integrations/linear", async (c) => {
     await linear.disconnect(c.var.user.id, c.req.raw.signal);
     return c.body(null, 204);
   });
-  app.get('/api/conversations', async (c) => {
+  app.get("/api/conversations", async (c) => {
     const rows = await database
       .select({
         createdAt: conversations.createdAt,
@@ -519,7 +519,7 @@ export function createApp(database = createDatabase()) {
       .limit(20);
     return c.json({ conversations: rows });
   });
-  app.get('/api/conversations/:id/items', async (c) => {
+  app.get("/api/conversations/:id/items", async (c) => {
     const rows = await database
       .select()
       .from(conversationItems)
@@ -529,14 +529,14 @@ export function createApp(database = createDatabase()) {
       )
       .where(
         and(
-          eq(conversations.id, c.req.param('id')),
+          eq(conversations.id, c.req.param("id")),
           eq(conversations.userId, c.var.user.id)
         )
       )
       .orderBy(asc(conversationItems.sequence));
     return c.json({ items: rows.map((row) => row.conversation_items) });
   });
-  app.post('/api/conversations/:id/status', async (c) => {
+  app.post("/api/conversations/:id/status", async (c) => {
     const parsed = conversationStatusInputSchema.safeParse(
       await c.req.json().catch(() => null)
     );
@@ -544,8 +544,8 @@ export function createApp(database = createDatabase()) {
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid conversation status',
+            code: "INVALID_REQUEST",
+            message: "Invalid conversation status",
             retryable: false,
           },
           ok: false,
@@ -557,7 +557,7 @@ export function createApp(database = createDatabase()) {
       .set({ status: parsed.data.status, updatedAt: new Date() })
       .where(
         and(
-          eq(conversations.id, c.req.param('id')),
+          eq(conversations.id, c.req.param("id")),
           eq(conversations.userId, c.var.user.id)
         )
       )
@@ -566,8 +566,8 @@ export function createApp(database = createDatabase()) {
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Conversation not found',
+            code: "INVALID_REQUEST",
+            message: "Conversation not found",
             retryable: false,
           },
           ok: false,
@@ -576,7 +576,7 @@ export function createApp(database = createDatabase()) {
       );
     return c.json({ ok: true });
   });
-  app.post('/api/conversations/:id/items', async (c) => {
+  app.post("/api/conversations/:id/items", async (c) => {
     let body: unknown;
     try {
       body = await c.req.json();
@@ -584,8 +584,8 @@ export function createApp(database = createDatabase()) {
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid JSON',
+            code: "INVALID_REQUEST",
+            message: "Invalid JSON",
             retryable: false,
           },
           ok: false,
@@ -598,15 +598,15 @@ export function createApp(database = createDatabase()) {
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid conversation item',
+            code: "INVALID_REQUEST",
+            message: "Invalid conversation item",
             retryable: false,
           },
           ok: false,
         },
         400
       );
-    const id = c.req.param('id');
+    const id = c.req.param("id");
     const owned = await database
       .select({ id: conversations.id })
       .from(conversations)
@@ -618,8 +618,8 @@ export function createApp(database = createDatabase()) {
       return c.json(
         {
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'Conversation not found',
+            code: "INVALID_REQUEST",
+            message: "Conversation not found",
             retryable: false,
           },
           ok: false,
@@ -646,17 +646,17 @@ export function createApp(database = createDatabase()) {
     });
     return c.json({ item }, 201);
   });
-  app.post('/api/tools', async (c) => {
+  app.post("/api/tools", async (c) => {
     let body: unknown;
     try {
       body = await c.req.json();
     } catch {
       return c.json(
         {
-          callId: 'unknown',
+          callId: "unknown",
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'The request body was not valid JSON',
+            code: "INVALID_REQUEST",
+            message: "The request body was not valid JSON",
             retryable: false,
           },
           ok: false,
@@ -669,15 +669,15 @@ export function createApp(database = createDatabase()) {
       return c.json(
         {
           callId:
-            typeof body === 'object' &&
+            typeof body === "object" &&
             body &&
-            'callId' in body &&
-            typeof body.callId === 'string'
+            "callId" in body &&
+            typeof body.callId === "string"
               ? body.callId
-              : 'unknown',
+              : "unknown",
           error: {
-            code: 'INVALID_REQUEST',
-            message: 'The tool request was invalid',
+            code: "INVALID_REQUEST",
+            message: "The tool request was invalid",
             retryable: false,
           },
           ok: false,
@@ -696,8 +696,8 @@ export function createApp(database = createDatabase()) {
   app.onError((error, c) => {
     const e = normalizeError(error);
     logger.error(
-      { errorCode: e.code, requestId: c.get('requestId') },
-      'Request failed'
+      { errorCode: e.code, requestId: c.get("requestId") },
+      "Request failed"
     );
     return c.json(
       {
@@ -712,14 +712,14 @@ export function createApp(database = createDatabase()) {
 function toolHttpStatus(
   code: string
 ): 400 | 401 | 403 | 404 | 409 | 429 | 500 | 502 | 504 {
-  if (code === 'UNKNOWN_TOOL') return 404;
-  if (code === 'PERMISSION_DENIED') return 403;
-  if (code === 'INTEGRATION_UNAVAILABLE' || code === 'TOOL_IN_PROGRESS')
+  if (code === "UNKNOWN_TOOL") return 404;
+  if (code === "PERMISSION_DENIED") return 403;
+  if (code === "INTEGRATION_UNAVAILABLE" || code === "TOOL_IN_PROGRESS")
     return 409;
-  if (code === 'INTEGRATION_AUTH_EXPIRED') return 401;
-  if (code === 'PROVIDER_RATE_LIMITED') return 429;
-  if (code === 'PROVIDER_UNAVAILABLE') return 502;
-  if (code === 'TOOL_TIMEOUT') return 504;
-  if (code === 'TOOL_EXECUTION_FAILED' || code === 'INTERNAL_ERROR') return 500;
+  if (code === "INTEGRATION_AUTH_EXPIRED") return 401;
+  if (code === "PROVIDER_RATE_LIMITED") return 429;
+  if (code === "PROVIDER_UNAVAILABLE") return 502;
+  if (code === "TOOL_TIMEOUT") return 504;
+  if (code === "TOOL_EXECUTION_FAILED" || code === "INTERNAL_ERROR") return 500;
   return 400;
 }

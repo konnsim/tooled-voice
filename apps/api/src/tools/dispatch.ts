@@ -1,14 +1,14 @@
-import type { ToolCallRequest, ToolResponse } from '@tooled-voice/shared';
-import { and, eq } from 'drizzle-orm';
-import { z } from 'zod';
+import type { ToolCallRequest, ToolResponse } from "@tooled-voice/shared";
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 import {
   conversations,
   toolExecutions,
   userProfiles,
-} from '../database/schema.js';
-import { ApiError, normalizeError } from '../errors/api-error.js';
-import type { ToolExecutionContext } from './define-tool.js';
-import { toolRegistry } from './registry.js';
+} from "../database/schema.js";
+import { ApiError, normalizeError } from "../errors/api-error.js";
+import type { ToolExecutionContext } from "./define-tool.js";
+import { toolRegistry } from "./registry.js";
 
 export async function dispatchTool(
   request: ToolCallRequest,
@@ -25,11 +25,11 @@ export async function dispatchTool(
   };
   const argumentKeys =
     request.arguments &&
-    typeof request.arguments === 'object' &&
+    typeof request.arguments === "object" &&
     !Array.isArray(request.arguments)
       ? Object.keys(request.arguments).sort()
       : [];
-  context.logger.info({ ...logContext, argumentKeys }, 'Tool call received');
+  context.logger.info({ ...logContext, argumentKeys }, "Tool call received");
   const existing = await context.database
     .select()
     .from(toolExecutions)
@@ -41,23 +41,23 @@ export async function dispatchTool(
     )
     .limit(1);
   const [previous] = existing;
-  if (previous?.status === 'succeeded') {
+  if (previous?.status === "succeeded") {
     context.logger.info(
-      { ...logContext, status: 'cached' },
-      'Tool call replayed'
+      { ...logContext, status: "cached" },
+      "Tool call replayed"
     );
     return { callId: request.callId, ok: true, result: previous.result };
   }
-  if (previous?.status === 'running') {
+  if (previous?.status === "running") {
     context.logger.info(
-      { ...logContext, status: 'in_progress' },
-      'Tool call rejected'
+      { ...logContext, status: "in_progress" },
+      "Tool call rejected"
     );
     return failure(
       request.callId,
       new ApiError(
-        'TOOL_IN_PROGRESS',
-        'This tool call is already being processed',
+        "TOOL_IN_PROGRESS",
+        "This tool call is already being processed",
         409,
         true
       )
@@ -68,15 +68,15 @@ export async function dispatchTool(
       {
         ...logContext,
         errorCode: previous.errorCode,
-        status: 'previously_failed',
+        status: "previously_failed",
       },
-      'Tool call replayed'
+      "Tool call replayed"
     );
     return {
       callId: request.callId,
       error: {
-        code: previous.errorCode ?? 'TOOL_EXECUTION_FAILED',
-        message: 'This tool call previously failed',
+        code: previous.errorCode ?? "TOOL_EXECUTION_FAILED",
+        message: "This tool call previously failed",
         retryable: previous.retryable ?? false,
       },
       ok: false,
@@ -85,25 +85,25 @@ export async function dispatchTool(
   const tool = toolRegistry.get(request.tool);
   if (!tool) {
     context.logger.info(
-      { ...logContext, errorCode: 'UNKNOWN_TOOL', status: 'rejected' },
-      'Tool call rejected'
+      { ...logContext, errorCode: "UNKNOWN_TOOL", status: "rejected" },
+      "Tool call rejected"
     );
     return failure(
       request.callId,
-      new ApiError('UNKNOWN_TOOL', 'The requested tool does not exist', 404)
+      new ApiError("UNKNOWN_TOOL", "The requested tool does not exist", 404)
     );
   }
   for (const permission of tool.permissions)
     if (!context.user.permissions.has(permission)) {
       context.logger.info(
-        { ...logContext, errorCode: 'PERMISSION_DENIED', status: 'rejected' },
-        'Tool call rejected'
+        { ...logContext, errorCode: "PERMISSION_DENIED", status: "rejected" },
+        "Tool call rejected"
       );
       return failure(
         request.callId,
         new ApiError(
-          'PERMISSION_DENIED',
-          'You do not have permission to use this tool',
+          "PERMISSION_DENIED",
+          "You do not have permission to use this tool",
           403
         )
       );
@@ -113,16 +113,16 @@ export async function dispatchTool(
     context.logger.info(
       {
         ...logContext,
-        errorCode: 'INVALID_TOOL_ARGUMENTS',
-        status: 'rejected',
+        errorCode: "INVALID_TOOL_ARGUMENTS",
+        status: "rejected",
       },
-      'Tool call rejected'
+      "Tool call rejected"
     );
     return failure(
       request.callId,
       new ApiError(
-        'INVALID_TOOL_ARGUMENTS',
-        'The tool arguments were invalid',
+        "INVALID_TOOL_ARGUMENTS",
+        "The tool arguments were invalid",
         400
       )
     );
@@ -143,14 +143,14 @@ export async function dispatchTool(
       .limit(1);
     if (!owned) {
       context.logger.info(
-        { ...logContext, errorCode: 'INVALID_REQUEST', status: 'rejected' },
-        'Tool call rejected'
+        { ...logContext, errorCode: "INVALID_REQUEST", status: "rejected" },
+        "Tool call rejected"
       );
       return failure(
         request.callId,
         new ApiError(
-          'INVALID_REQUEST',
-          'The conversation was not found',
+          "INVALID_REQUEST",
+          "The conversation was not found",
           400,
           false
         )
@@ -177,14 +177,14 @@ export async function dispatchTool(
     .returning({ id: toolExecutions.id });
   if (!audit) {
     context.logger.info(
-      { ...logContext, status: 'in_progress' },
-      'Tool call rejected'
+      { ...logContext, status: "in_progress" },
+      "Tool call rejected"
     );
     return failure(
       request.callId,
       new ApiError(
-        'TOOL_IN_PROGRESS',
-        'This tool call is already being processed',
+        "TOOL_IN_PROGRESS",
+        "This tool call is already being processed",
         409,
         true
       )
@@ -201,27 +201,27 @@ export async function dispatchTool(
       .set({
         durationMs: Date.now() - started,
         result: validated,
-        status: 'succeeded',
+        status: "succeeded",
         updatedAt: new Date(),
       })
       .where(eq(toolExecutions.id, audit.id));
     context.logger.info(
-      { ...logContext, durationMs: Date.now() - started, status: 'succeeded' },
-      'Tool executed'
+      { ...logContext, durationMs: Date.now() - started, status: "succeeded" },
+      "Tool executed"
     );
     return { callId: request.callId, ok: true, result: validated };
   } catch (unknown) {
     const error = timeout.aborted
       ? new ApiError(
-          'TOOL_TIMEOUT',
-          'The tool execution timed out',
+          "TOOL_TIMEOUT",
+          "The tool execution timed out",
           504,
           tool.retry.enabled
         )
       : unknown instanceof z.ZodError
         ? new ApiError(
-            'TOOL_EXECUTION_FAILED',
-            'The tool returned an invalid result',
+            "TOOL_EXECUTION_FAILED",
+            "The tool returned an invalid result",
             500,
             false
           )
@@ -232,7 +232,7 @@ export async function dispatchTool(
         durationMs: Date.now() - started,
         errorCode: error.code,
         retryable: error.retryable,
-        status: error.code === 'TOOL_TIMEOUT' ? 'timed_out' : 'failed',
+        status: error.code === "TOOL_TIMEOUT" ? "timed_out" : "failed",
         updatedAt: new Date(),
       })
       .where(eq(toolExecutions.id, audit.id));
@@ -241,9 +241,9 @@ export async function dispatchTool(
         ...logContext,
         durationMs: Date.now() - started,
         errorCode: error.code,
-        status: 'failed',
+        status: "failed",
       },
-      'Tool failed'
+      "Tool failed"
     );
     return failure(request.callId, error);
   }

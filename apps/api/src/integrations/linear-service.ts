@@ -1,28 +1,28 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, gt, isNull } from 'drizzle-orm';
-import type { Database } from '../database/client.js';
+import { createHash, randomBytes } from "node:crypto";
+import { and, eq, gt, isNull } from "drizzle-orm";
+import type { Database } from "../database/client.js";
 import {
   integrationAccounts,
   integrationOauthStates,
   userProfiles,
-} from '../database/schema.js';
-import { ApiError } from '../errors/api-error.js';
+} from "../database/schema.js";
+import { ApiError } from "../errors/api-error.js";
 import {
   IntegrationStore,
   type LinearCredentials,
-} from './integration-store.js';
+} from "./integration-store.js";
 import {
   LinearApi,
   type LinearOAuthConfig,
   type LinearTokenResponse,
-} from './linear-api.js';
+} from "./linear-api.js";
 
-const provider = 'linear';
+const provider = "linear";
 const stateLifetimeMs = 10 * 60 * 1000;
 const refreshLeewayMs = 2 * 60 * 1000;
 const scopeSeparatorPattern = /[ ,]+/;
 const refreshes = new Map<string, Promise<LinearCredentials>>();
-export type LinearApprovalPolicy = 'ask' | 'automatic';
+export type LinearApprovalPolicy = "ask" | "automatic";
 
 export class LinearService {
   private readonly store: IntegrationStore;
@@ -38,11 +38,11 @@ export class LinearService {
   ): Promise<{ authorizationUrl: string }> {
     const config = oauthConfig();
     const redirectUri = linearRedirectUri();
-    const state = randomBytes(32).toString('base64url');
-    const codeVerifier = randomBytes(48).toString('base64url');
-    const codeChallenge = createHash('sha256')
+    const state = randomBytes(32).toString("base64url");
+    const codeVerifier = randomBytes(48).toString("base64url");
+    const codeChallenge = createHash("sha256")
       .update(codeVerifier)
-      .digest('base64url');
+      .digest("base64url");
     await this.database
       .insert(userProfiles)
       .values({ id: userId })
@@ -63,14 +63,14 @@ export class LinearService {
       stateHash: hashState(state),
       userId,
     });
-    const url = new URL('https://linear.app/oauth/authorize');
+    const url = new URL("https://linear.app/oauth/authorize");
     url.search = new URLSearchParams({
       client_id: config.clientId,
       code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
+      code_challenge_method: "S256",
       redirect_uri: redirectUri,
-      response_type: 'code',
-      scope: 'read,write',
+      response_type: "code",
+      scope: "read,write",
       state,
     }).toString();
     return { authorizationUrl: url.toString() };
@@ -98,8 +98,8 @@ export class LinearService {
       });
     if (!oauthState)
       throw new ApiError(
-        'OAUTH_INVALID_STATE',
-        'The Linear authorization request is invalid or expired',
+        "OAUTH_INVALID_STATE",
+        "The Linear authorization request is invalid or expired",
         400,
         false
       );
@@ -139,10 +139,10 @@ export class LinearService {
           connected: true,
           ...(row.expiresAt ? { expiresAt: row.expiresAt.toISOString() } : {}),
           approvalPolicy:
-            row.approvalPolicy === 'automatic' ? 'automatic' : 'ask',
+            row.approvalPolicy === "automatic" ? "automatic" : "ask",
           scopes: row.scopes ?? [],
         }
-      : { approvalPolicy: 'ask', connected: false, scopes: [] };
+      : { approvalPolicy: "ask", connected: false, scopes: [] };
   }
   async setApprovalPolicy(
     userId: string,
@@ -160,8 +160,8 @@ export class LinearService {
       .returning({ id: integrationAccounts.id });
     if (!updated)
       throw new ApiError(
-        'INTEGRATION_UNAVAILABLE',
-        'Connect Linear before changing permissions',
+        "INTEGRATION_UNAVAILABLE",
+        "Connect Linear before changing permissions",
         409,
         false
       );
@@ -207,8 +207,8 @@ export class LinearService {
       return Promise.resolve(credentials);
     if (!credentials.refreshToken)
       throw new ApiError(
-        'INTEGRATION_AUTH_EXPIRED',
-        'Reconnect Linear to continue',
+        "INTEGRATION_AUTH_EXPIRED",
+        "Reconnect Linear to continue",
         401,
         false
       );
@@ -227,15 +227,15 @@ export class LinearService {
 }
 
 export const linearMobileRedirectUri = () =>
-  process.env.LINEAR_MOBILE_REDIRECT_URI ?? 'tooledvoice://integrations/linear';
+  process.env.LINEAR_MOBILE_REDIRECT_URI ?? "tooledvoice://integrations/linear";
 
 function oauthConfig(): LinearOAuthConfig {
   const clientId = process.env.LINEAR_CLIENT_ID;
   const clientSecret = process.env.LINEAR_CLIENT_SECRET;
   if (!(clientId && clientSecret))
     throw new ApiError(
-      'INTEGRATION_UNAVAILABLE',
-      'Linear OAuth is not configured',
+      "INTEGRATION_UNAVAILABLE",
+      "Linear OAuth is not configured",
       503,
       false
     );
@@ -245,15 +245,15 @@ function linearRedirectUri(): string {
   const value = process.env.LINEAR_REDIRECT_URI;
   if (!value)
     throw new ApiError(
-      'INTEGRATION_UNAVAILABLE',
-      'LINEAR_REDIRECT_URI is not configured',
+      "INTEGRATION_UNAVAILABLE",
+      "LINEAR_REDIRECT_URI is not configured",
       503,
       false
     );
   return value;
 }
 function hashState(state: string) {
-  return createHash('sha256').update(state).digest('hex');
+  return createHash("sha256").update(state).digest("hex");
 }
 function toCredentials(
   token: LinearTokenResponse,

@@ -1,5 +1,5 @@
-import type { z } from 'zod';
-import type { Database } from '../database/client.js';
+import type { z } from "zod";
+import type { Database } from "../database/client.js";
 export interface AuthenticatedUser {
   id: string;
   permissions: ReadonlySet<string>;
