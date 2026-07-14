@@ -19,10 +19,12 @@ export const linearCredentialsSchema = z.object({
 export type LinearCredentials = z.infer<typeof linearCredentialsSchema>;
 
 export class IntegrationStore {
-  constructor(
-    private readonly database: Database,
-    private readonly configuredKeyring?: Keyring
-  ) {}
+  private readonly configuredKeyring: Keyring | undefined;
+  private readonly database: Database;
+  constructor(database: Database, configuredKeyring?: Keyring) {
+    this.configuredKeyring = configuredKeyring;
+    this.database = database;
+  }
   private keyring() {
     return this.configuredKeyring ?? createEnvironmentKeyring();
   }

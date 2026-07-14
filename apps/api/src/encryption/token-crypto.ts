@@ -39,7 +39,8 @@ export function createKeyring(
       return [version, key] as const;
     })
   );
-  const current = keys.get(currentVersion)!;
+  const current = keys.get(currentVersion);
+  if (!current) throw new Error("Current encryption key is unavailable");
   return {
     current: () => ({ key: current, version: currentVersion }),
     get: (version) => keys.get(version),

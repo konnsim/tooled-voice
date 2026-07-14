@@ -7,11 +7,11 @@ import {
 import InCallManager from "react-native-incall-manager";
 
 export type AudioRoute = "speaker" | "earpiece" | "external";
-export type AudioSessionEvent = {
-  event: string;
+export interface AudioSessionEvent {
   detail?: string;
+  event: string;
   route?: AudioRoute;
-};
+}
 
 let subscriptions: EmitterSubscription[] = [];
 
@@ -76,9 +76,9 @@ export function setSpeakerRoute(
 }
 
 export function stopAudioSession() {
-  subscriptions.forEach((subscription) => {
+  for (const subscription of subscriptions) {
     subscription.remove();
-  });
+  }
   subscriptions = [];
   try {
     InCallManager.setKeepScreenOn(false);

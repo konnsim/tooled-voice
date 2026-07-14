@@ -25,19 +25,19 @@ const nonRetryableConnectionErrorPattern =
   /MICROPHONE|PERMISSION|NOT.?ALLOWED|AUTH_REQUIRED|AUTH_INVALID/i;
 const readOnlyMcpToolPattern =
   /(^|_)(get|list|search|find|read|fetch|retrieve)(_|$)/i;
-export type VoiceDiagnostic = {
-  id: string;
-  event: string;
+export interface VoiceDiagnostic {
   at: number;
-  elapsedMs?: number;
   detail?: string;
-};
-export type McpApproval = {
+  elapsedMs?: number;
+  event: string;
   id: string;
-  serverLabel: string;
-  name: string;
+}
+export interface McpApproval {
   arguments: string;
-};
+  id: string;
+  name: string;
+  serverLabel: string;
+}
 type Listener = (event: {
   state?: ConnectionState;
   muted?: boolean;
@@ -53,9 +53,9 @@ type Listener = (event: {
   mcpApproval?: McpApproval | null;
   error?: string;
 }) => void;
-type Events = {
+interface Events {
   addEventListener(type: string, listener: (event: any) => void): void;
-};
+}
 type Channel = Events & {
   readyState: string;
   send(data: string): void;
@@ -89,11 +89,10 @@ export class RealtimeClient {
   private responseCreatedAt = 0;
   private firstAudioSeen = false;
   private diagnosticId = 0;
-  constructor(
-    private readonly listener: Listener,
-    conversationId?: string
-  ) {
+  private readonly listener: Listener;
+  constructor(listener: Listener, conversationId?: string) {
     this.conversationId = conversationId;
+    this.listener = listener;
   }
   setConversationIfUnset(conversationId: string) {
     this.conversationId ??= conversationId;
@@ -161,9 +160,9 @@ export class RealtimeClient {
       this.microphone = microphone;
       const pc = new RTCPeerConnection();
       this.pc = pc;
-      stream.getTracks().forEach((track) => {
+      for (const track of stream.getTracks()) {
         pc.addTrack(track, stream);
-      });
+      }
       const pcEvents = pc as unknown as Events;
       pcEvents.addEventListener("track", (event) => {
         this.remote = event.streams?.[0];
@@ -290,14 +289,14 @@ export class RealtimeClient {
     if (!this.pc) return 0;
     const stats = await this.pc.getStats();
     let bytes = 0;
-    stats.forEach((report: any) => {
+    for (const report of stats.values()) {
       if (
         report?.type === "inbound-rtp" &&
         (report.kind === "audio" || report.mediaType === "audio") &&
         typeof report.bytesReceived === "number"
       )
         bytes += report.bytesReceived;
-    });
+    }
     return bytes;
   }
   private async startResponseAudioMonitoring() {
@@ -714,16 +713,16 @@ export class RealtimeClient {
     try {
       pc?.close();
     } catch {}
-    this.stream?.getTracks().forEach((track) => {
+    for (const track of this.stream?.getTracks() ?? []) {
       try {
         track.stop();
       } catch {}
-    });
-    this.remote?.getTracks().forEach((track) => {
+    }
+    for (const track of this.remote?.getTracks() ?? []) {
       try {
         track.stop();
       } catch {}
-    });
+    }
     stopAudioSession();
     this.stream = undefined;
     this.microphone = undefined;

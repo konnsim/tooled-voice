@@ -2,12 +2,12 @@ import { type ToolCallRequest, toolResponseSchema } from "@tooled-voice/shared";
 import { supabase } from "../auth/supabase";
 import { config } from "../config";
 export class ApiClientError extends Error {
-  constructor(
-    public readonly code: string,
-    message: string,
-    public readonly retryable = false
-  ) {
+  readonly code: string;
+  readonly retryable: boolean;
+  constructor(code: string, message: string, retryable = false) {
     super(message);
+    this.code = code;
+    this.retryable = retryable;
   }
 }
 async function token() {
@@ -100,12 +100,12 @@ export const finishConversation = (
     body: JSON.stringify({ status }),
     method: "POST",
   }) as Promise<{ ok: true }>;
-export type LinearStatus = {
+export interface LinearStatus {
+  approvalPolicy: "ask" | "automatic";
   connected: boolean;
   expiresAt?: string;
   scopes: string[];
-  approvalPolicy: "ask" | "automatic";
-};
+}
 export const getLinearStatus = () =>
   apiFetch("/api/integrations/linear/status") as Promise<LinearStatus>;
 export const setLinearApprovalPolicy = (approvalPolicy: "ask" | "automatic") =>
@@ -120,27 +120,27 @@ export const beginLinearConnection = () =>
 export const disconnectLinear = () =>
   apiFetch("/api/integrations/linear", { method: "DELETE" }) as Promise<void>;
 export type ToolApprovalPolicy = "ask" | "automatic";
-export type ToolConnection = {
-  slug: string;
-  name: string;
+export interface ToolConnection {
   connected: boolean;
   logo?: string;
-};
-export type ToolAccount = {
-  id: string;
-  toolkit: string;
-  status: string;
+  name: string;
+  slug: string;
+}
+export interface ToolAccount {
+  active: boolean;
   alias?: string;
   createdAt: string;
+  id: string;
+  status: string;
+  toolkit: string;
   updatedAt: string;
-  active: boolean;
-};
-export type ToolSetting = {
-  enabled?: boolean;
+}
+export interface ToolSetting {
   approvalPolicy?: ToolApprovalPolicy;
   connectedAccountIds?: string[];
   disabledTools?: string[];
-};
+  enabled?: boolean;
+}
 export type ToolSettings = Record<string, ToolSetting>;
 export const getToolConnections = () =>
   apiFetch("/api/integrations") as Promise<{

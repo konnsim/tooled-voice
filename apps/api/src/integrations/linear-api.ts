@@ -16,7 +16,10 @@ export interface LinearOAuthConfig {
 }
 
 export class LinearApi {
-  constructor(private readonly fetcher: typeof fetch = fetch) {}
+  private readonly fetcher: typeof fetch;
+  constructor(fetcher: typeof fetch = fetch) {
+    this.fetcher = fetcher;
+  }
   exchangeCode(
     config: LinearOAuthConfig,
     input: { code: string; codeVerifier: string; redirectUri: string },

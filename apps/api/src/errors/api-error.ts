@@ -20,14 +20,20 @@ export type ErrorCode =
 const retryableDatabaseStatePattern = /^(08|40|53|57P)/;
 const databaseCodePattern = /^[0-9A-Z]{5}$/;
 export class ApiError extends Error {
+  readonly code: ErrorCode;
+  readonly retryable: boolean;
+  readonly status: number;
   constructor(
-    public readonly code: ErrorCode,
+    code: ErrorCode,
     message: string,
-    public readonly status: number,
-    public readonly retryable = false,
+    status: number,
+    retryable = false,
     options?: ErrorOptions
   ) {
     super(message, options);
+    this.code = code;
+    this.retryable = retryable;
+    this.status = status;
   }
 }
 export function normalizeError(error: unknown): ApiError {

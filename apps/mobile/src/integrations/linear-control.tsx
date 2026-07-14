@@ -1,4 +1,4 @@
-import * as WebBrowser from "expo-web-browser";
+import { openAuthSessionAsync } from "expo-web-browser";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -188,7 +188,7 @@ function ToolManager(props: {
     try {
       const { authorizationUrl, connectionId } =
         await beginToolConnection(toolkit);
-      const result = await WebBrowser.openAuthSessionAsync(
+      const result = await openAuthSessionAsync(
         authorizationUrl,
         integrationCallbackUrl,
         {

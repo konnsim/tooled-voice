@@ -50,13 +50,14 @@ export function useVoiceSession() {
     if (event.muted !== undefined) setMuted(event.muted);
     if (event.speaker !== undefined) setSpeaker(event.speaker);
     if (event.route) setRoute(event.route);
-    if (event.diagnostic)
-      setDiagnostics((items) => [event.diagnostic!, ...items].slice(0, 24));
+    const { diagnostic } = event;
+    if (diagnostic)
+      setDiagnostics((items) => [diagnostic, ...items].slice(0, 24));
     if (event.mcpApproval !== undefined) setMcpApproval(event.mcpApproval);
     if (event.error) setError(event.error);
-    if (event.transcript)
+    const { transcript } = event;
+    if (transcript)
       setHistory((items) => {
-        const transcript = event.transcript!;
         const index = items.findIndex((item) => item.id === transcript.id);
         if (!transcript.text.trim())
           return transcript.final

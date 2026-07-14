@@ -25,32 +25,14 @@
     "rules": {
       "complexity": {
         "noExcessiveCognitiveComplexity": "off",
-        "noForEach": "off",
         "noVoid": "off"
       },
-      "correctness": {
-        "useExhaustiveDependencies": "info"
-      },
-      "performance": {
-        "noBarrelFile": "off",
-        "noNamespaceImport": "off"
-      },
       "style": {
-        "noExportedImports": "off",
         "noNestedTernary": "off",
-        "noNonNullAssertion": "off",
-        "noParameterProperties": "off",
         "useErrorCause": "off",
         "useBlockStatements": "off",
-        "useConsistentArrayType": "off",
-        "useConsistentMemberAccessibility": "off",
         "useConsistentMethodSignatures": "off",
-        "useConsistentTypeDefinitions": "off",
         "useFilenamingConvention": "off"
-      },
-      "suspicious": {
-        "noArrayIndexKey": "info",
-        "useAwait": "info"
       }
     }
   },

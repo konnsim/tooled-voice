@@ -22,7 +22,9 @@ describe("tool registry", () => {
     ).toBe(false);
   });
   it("executes the real timezone tool", async () => {
-    const result = getCurrentTime.output!.parse(
+    const { output } = getCurrentTime;
+    if (!output) throw new Error("Expected the timezone tool output schema");
+    const result = output.parse(
       await getCurrentTime.execute(
         { timezone: "Australia/Sydney" },
         {} as never

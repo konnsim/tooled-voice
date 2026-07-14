@@ -28,8 +28,10 @@ export interface ToolSetting {
 export type ToolSettings = Record<string, ToolSetting>;
 
 export class ComposioService {
+  private readonly apiKey: string | undefined;
   private readonly client: Composio | undefined;
-  constructor(private readonly apiKey = process.env.COMPOSIO_API_KEY) {
+  constructor(apiKey = process.env.COMPOSIO_API_KEY) {
+    this.apiKey = apiKey;
     this.client = apiKey ? new Composio({ apiKey }) : undefined;
   }
   get configured() {
@@ -207,12 +209,12 @@ export class ComposioService {
     const tools = Object.fromEntries(
       configured
         .filter(([, value]) => value.disabledTools?.length)
-        .map(([slug, value]) => [slug, { disable: value.disabledTools! }])
+        .map(([slug, value]) => [slug, { disable: value.disabledTools ?? [] }])
     );
     const connectedAccounts = Object.fromEntries(
       configured
         .filter(([, value]) => value.connectedAccountIds?.length)
-        .map(([slug, value]) => [slug, value.connectedAccountIds!])
+        .map(([slug, value]) => [slug, value.connectedAccountIds ?? []])
     );
     const session = await this.client.sessions.create(userId, {
       connectedAccounts,
@@ -242,7 +244,7 @@ export class ComposioService {
   }
 }
 function toolkitName(slug: ComposioToolkit) {
-  return slug[0]!.toUpperCase() + slug.slice(1);
+  return slug.charAt(0).toUpperCase() + slug.slice(1);
 }
 export function parseComposioToolkit(value: string): ComposioToolkit | null {
   return toolkitSlugPattern.test(value) ? value : null;

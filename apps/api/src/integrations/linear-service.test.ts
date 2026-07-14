@@ -47,7 +47,8 @@ describe("LinearService OAuth", () => {
       "00000000-0000-4000-8000-000000000001"
     );
     const url = new URL(authorizationUrl);
-    const state = url.searchParams.get("state")!;
+    const state = url.searchParams.get("state");
+    if (!state) throw new Error("Expected an OAuth state parameter");
     expect(stateRow?.stateHash).toBe(
       createHash("sha256").update(state).digest("hex")
     );

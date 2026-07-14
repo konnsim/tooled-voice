@@ -29,7 +29,9 @@ describe("LinearApi", () => {
       access_token: "access",
       refresh_token: "refresh",
     });
-    const [, init] = fetcher.mock.calls[0]!;
+    const [call] = fetcher.mock.calls;
+    if (!call) throw new Error("Expected Linear to make a token request");
+    const [, init] = call;
     expect(String(init?.body)).toContain("code_verifier=verifier");
     expect(String(init?.body)).toContain("client_secret=secret");
   });

@@ -25,12 +25,16 @@ const refreshes = new Map<string, Promise<LinearCredentials>>();
 export type LinearApprovalPolicy = "ask" | "automatic";
 
 export class LinearService {
+  private readonly api: LinearApi;
+  private readonly database: Database;
   private readonly store: IntegrationStore;
   constructor(
-    private readonly database: Database,
-    private readonly api = new LinearApi(),
+    database: Database,
+    api = new LinearApi(),
     store?: IntegrationStore
   ) {
+    this.api = api;
+    this.database = database;
     this.store = store ?? new IntegrationStore(database);
   }
   async createAuthorization(

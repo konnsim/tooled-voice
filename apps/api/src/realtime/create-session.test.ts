@@ -28,7 +28,9 @@ describe("createRealtimeSession", () => {
       model: "gpt-realtime-2.1",
       sessionId: "sess_1",
     });
-    const [, init] = fetcher.mock.calls[0]!;
+    const [call] = fetcher.mock.calls;
+    if (!call) throw new Error("Expected a Realtime session request");
+    const [, init] = call;
     const body = JSON.parse(String(init?.body)) as {
       session: {
         model: string;
@@ -36,7 +38,7 @@ describe("createRealtimeSession", () => {
         max_output_tokens: number;
         instructions: string;
         audio: { input: { turn_detection: Record<string, unknown> } };
-        tools: Array<Record<string, unknown>>;
+        tools: Record<string, unknown>[];
       };
     };
     expect(body.session).toMatchObject({
@@ -70,8 +72,11 @@ describe("createRealtimeSession", () => {
       label: "composio",
       url: "https://mcp.example/session",
     });
-    const body = JSON.parse(String(fetcher.mock.calls[0]![1]?.body)) as {
-      session: { tools: Array<Record<string, unknown>> };
+    const [call] = fetcher.mock.calls;
+    if (!call) throw new Error("Expected a Realtime session request");
+    const [, init] = call;
+    const body = JSON.parse(String(init?.body)) as {
+      session: { tools: Record<string, unknown>[] };
     };
     expect(body.session.tools[1]).toEqual(
       expect.objectContaining({
@@ -99,8 +104,11 @@ describe("createRealtimeSession", () => {
       label: "composio",
       url: "https://mcp.example/session",
     });
-    const body = JSON.parse(String(fetcher.mock.calls[0]![1]?.body)) as {
-      session: { tools: Array<Record<string, unknown>> };
+    const [call] = fetcher.mock.calls;
+    if (!call) throw new Error("Expected a Realtime session request");
+    const [, init] = call;
+    const body = JSON.parse(String(init?.body)) as {
+      session: { tools: Record<string, unknown>[] };
     };
     expect(body.session.tools[1]).toMatchObject({
       require_approval: "never",

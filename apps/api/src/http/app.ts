@@ -13,7 +13,7 @@ import {
   conversations,
   userProfiles,
 } from "../database/schema.js";
-import { normalizeError } from "../errors/api-error.js";
+import { ApiError, normalizeError } from "../errors/api-error.js";
 import type { ToolSettings } from "../integrations/composio-service.js";
 import {
   ComposioService,
@@ -29,10 +29,10 @@ import { createRealtimeSession } from "../realtime/create-session.js";
 import { dispatchTool } from "../tools/dispatch.js";
 
 const bearerPrefixPattern = /^Bearer\s+/i;
-type Variables = {
-  user: Awaited<ReturnType<typeof verifyAccessToken>>;
+interface Variables {
   requestId: string;
-};
+  user: Awaited<ReturnType<typeof verifyAccessToken>>;
+}
 export function createApp(database = createDatabase()) {
   const app = new Hono<{ Variables: Variables }>();
   const linear = new LinearService(database);
@@ -227,7 +227,13 @@ export function createApp(database = createDatabase()) {
           .insert(conversations)
           .values({ realtimeSessionId: session.sessionId, userId })
           .returning({ id: conversations.id });
-        conversationId = created!.id;
+        if (!created)
+          throw new ApiError(
+            "INTERNAL_ERROR",
+            "Failed to create the conversation",
+            500
+          );
+        conversationId = created.id;
       }
       logger.info(
         {
