@@ -25,7 +25,9 @@ const schema = {
 };
 export type Database = ReturnType<typeof createDatabase>;
 export function createDatabase(url = process.env.DATABASE_URL) {
-  if (!url) throw new Error("DATABASE_URL is required");
+  if (!url) {
+    throw new Error("DATABASE_URL is required");
+  }
   const client = postgres(url, {
     connect_timeout: 10,
     idle_timeout: 20,

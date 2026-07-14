@@ -7,13 +7,23 @@ export interface RealtimeMcpConnection {
   label: string;
   url: string;
 }
+const realtimeUnavailable = (cause: unknown) =>
+  new ApiError(
+    "REALTIME_SESSION_FAILED",
+    "Unable to reach OpenAI Realtime",
+    502,
+    true,
+    { cause }
+  );
 export async function createRealtimeSession(
   userId: string,
   signal: AbortSignal,
   mcpConnection?: RealtimeMcpConnection
 ) {
   const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY is required");
+  if (!key) {
+    throw new Error("OPENAI_API_KEY is required");
+  }
   const safety = createHash("sha256")
     .update(`tooled-voice:${userId}`)
     .digest("hex");
@@ -86,33 +96,29 @@ export async function createRealtimeSession(
       }
     );
   } catch (error) {
-    throw new ApiError(
-      "REALTIME_SESSION_FAILED",
-      "Unable to reach OpenAI Realtime",
-      502,
-      true,
-      { cause: error }
-    );
+    throw realtimeUnavailable(error);
   }
-  if (!response.ok)
+  if (!response.ok) {
     throw new ApiError(
       "REALTIME_SESSION_FAILED",
       "Unable to create a Realtime session",
       502,
       response.status >= 500
     );
+  }
   const data = (await response.json()) as {
     value?: string;
     expires_at?: number;
     session?: { id?: string };
   };
-  if (!data.value)
+  if (!data.value) {
     throw new ApiError(
       "REALTIME_SESSION_FAILED",
       "OpenAI returned an invalid Realtime credential",
       502,
       false
     );
+  }
   return {
     clientSecret: data.value,
     expiresAt: data.expires_at,

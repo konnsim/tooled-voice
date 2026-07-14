@@ -100,13 +100,14 @@ export class LinearService {
         redirectUri: integrationOauthStates.redirectUri,
         userId: integrationOauthStates.userId,
       });
-    if (!oauthState)
+    if (!oauthState) {
       throw new ApiError(
         "OAUTH_INVALID_STATE",
         "The Linear authorization request is invalid or expired",
         400,
         false
       );
+    }
     const token = await this.api.exchangeCode(
       oauthConfig(),
       {
@@ -162,20 +163,22 @@ export class LinearService {
         )
       )
       .returning({ id: integrationAccounts.id });
-    if (!updated)
+    if (!updated) {
       throw new ApiError(
         "INTEGRATION_UNAVAILABLE",
         "Connect Linear before changing permissions",
         409,
         false
       );
+    }
   }
   async disconnect(userId: string, signal: AbortSignal): Promise<void> {
     const credentials = await this.store.getLinear(userId);
-    if (credentials)
+    if (credentials) {
       await this.api
         .revoke(credentials.accessToken, signal)
         .catch(() => undefined);
+    }
     await this.store.deleteLinear(userId);
   }
   async accessToken(
@@ -183,7 +186,9 @@ export class LinearService {
     signal: AbortSignal
   ): Promise<string | null> {
     const credentials = await this.store.getLinear(userId);
-    if (!credentials) return null;
+    if (!credentials) {
+      return null;
+    }
     return (await this.validCredentials(userId, signal, credentials))
       .accessToken;
   }
@@ -195,7 +200,9 @@ export class LinearService {
     approvalPolicy: LinearApprovalPolicy;
   } | null> {
     const accessToken = await this.accessToken(userId, signal);
-    if (!accessToken) return null;
+    if (!accessToken) {
+      return null;
+    }
     const status = await this.status(userId);
     return { accessToken, approvalPolicy: status.approvalPolicy };
   }
@@ -207,17 +214,21 @@ export class LinearService {
     if (
       !credentials.expiresAt ||
       new Date(credentials.expiresAt).getTime() - Date.now() > refreshLeewayMs
-    )
+    ) {
       return Promise.resolve(credentials);
-    if (!credentials.refreshToken)
+    }
+    if (!credentials.refreshToken) {
       throw new ApiError(
         "INTEGRATION_AUTH_EXPIRED",
         "Reconnect Linear to continue",
         401,
         false
       );
+    }
     const active = refreshes.get(userId);
-    if (active) return active;
+    if (active) {
+      return active;
+    }
     const refresh = this.api
       .refreshToken(oauthConfig(), credentials.refreshToken, signal)
       .then((token) => {
@@ -236,24 +247,26 @@ export const linearMobileRedirectUri = () =>
 function oauthConfig(): LinearOAuthConfig {
   const clientId = process.env.LINEAR_CLIENT_ID;
   const clientSecret = process.env.LINEAR_CLIENT_SECRET;
-  if (!(clientId && clientSecret))
+  if (!(clientId && clientSecret)) {
     throw new ApiError(
       "INTEGRATION_UNAVAILABLE",
       "Linear OAuth is not configured",
       503,
       false
     );
+  }
   return { clientId, clientSecret };
 }
 function linearRedirectUri(): string {
   const value = process.env.LINEAR_REDIRECT_URI;
-  if (!value)
+  if (!value) {
     throw new ApiError(
       "INTEGRATION_UNAVAILABLE",
       "LINEAR_REDIRECT_URI is not configured",
       503,
       false
     );
+  }
   return value;
 }
 function hashState(state: string) {

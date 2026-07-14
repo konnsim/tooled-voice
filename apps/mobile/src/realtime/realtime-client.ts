@@ -54,12 +54,24 @@ type Listener = (event: {
   error?: string;
 }) => void;
 interface Events {
-  addEventListener(type: string, listener: (event: any) => void): void;
+  addEventListener: (
+    type: string,
+    listener: (event: { data?: unknown; streams?: MediaStream[] }) => void
+  ) => void;
 }
 type Channel = Events & {
   readyState: string;
-  send(data: string): void;
-  close(): void;
+  send: (data: string) => void;
+  close: () => void;
+};
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+const nestedString = (value: unknown, key: string): string | undefined => {
+  if (!isRecord(value)) {
+    return;
+  }
+  const nested = value[key];
+  return typeof nested === "string" ? nested : undefined;
 };
 export class RealtimeClient {
   private pc: RTCPeerConnection | undefined;
@@ -69,30 +81,44 @@ export class RealtimeClient {
   private remote: MediaStream | undefined;
   private conversationId: string | undefined;
   private toolApprovalPolicies: Record<string, "ask" | "automatic"> = {};
-  private closed = false;
-  private retries = 0;
-  private responseActive = false;
-  private userSpeaking = false;
-  private desiredMuted = false;
-  private speaker = true;
+  private closed: boolean;
+  private retries: number;
+  private responseActive: boolean;
+  private userSpeaking: boolean;
+  private desiredMuted: boolean;
+  private speaker: boolean;
   private route: AudioRoute = "speaker";
   private vadEagerness: "auto" | "high" = "high";
-  private reconnecting = false;
+  private reconnecting: boolean;
   private openTimer: ReturnType<typeof setTimeout> | undefined;
   private statsTimer: ReturnType<typeof setInterval> | undefined;
-  private statsReading = false;
-  private lastInboundAudioBytes = 0;
+  private statsReading: boolean;
+  private lastInboundAudioBytes: number;
   private readonly streamingTranscripts = new Map<string, string>();
   private readonly mcpStarted = new Map<string, number>();
-  private connectStarted = 0;
-  private speechStoppedAt = 0;
-  private responseCreatedAt = 0;
-  private firstAudioSeen = false;
-  private diagnosticId = 0;
+  private connectStarted: number;
+  private speechStoppedAt: number;
+  private responseCreatedAt: number;
+  private firstAudioSeen: boolean;
+  private diagnosticId: number;
   private readonly listener: Listener;
   constructor(listener: Listener, conversationId?: string) {
+    this.closed = false;
+    this.connectStarted = 0;
     this.conversationId = conversationId;
+    this.desiredMuted = false;
+    this.diagnosticId = 0;
+    this.firstAudioSeen = false;
+    this.lastInboundAudioBytes = 0;
     this.listener = listener;
+    this.reconnecting = false;
+    this.responseActive = false;
+    this.responseCreatedAt = 0;
+    this.retries = 0;
+    this.speaker = true;
+    this.speechStoppedAt = 0;
+    this.statsReading = false;
+    this.userSpeaking = false;
   }
   setConversationIfUnset(conversationId: string) {
     this.conversationId ??= conversationId;
@@ -126,7 +152,9 @@ export class RealtimeClient {
     this.closed = false;
     this.connectStarted = performance.now();
     this.diagnostic(reconnecting ? "reconnect_started" : "connect_started");
-    if (reconnecting) this.state("reconnecting");
+    if (reconnecting) {
+      this.state("reconnecting");
+    }
     try {
       const credentialStarted = performance.now();
       const credential = await createRealtimeCredential(this.conversationId);
@@ -155,7 +183,9 @@ export class RealtimeClient {
         performance.now() - microphoneStarted
       );
       const [microphone] = stream.getAudioTracks();
-      if (!microphone) throw new Error("MICROPHONE_UNAVAILABLE");
+      if (!microphone) {
+        throw new Error("MICROPHONE_UNAVAILABLE");
+      }
       microphone.enabled = false;
       this.microphone = microphone;
       const pc = new RTCPeerConnection();
@@ -171,17 +201,19 @@ export class RealtimeClient {
         if (
           this.pc === pc &&
           ["failed", "disconnected"].includes(pc.connectionState)
-        )
-          void this.reconnect();
+        ) {
+          this.reconnect().catch(() => undefined);
+        }
       });
       const channel = pc.createDataChannel("oai-events") as unknown as Channel;
       this.channel = channel;
-      channel.addEventListener(
-        "message",
-        (event) => void this.onEvent(event.data)
+      channel.addEventListener("message", (event) =>
+        this.onEvent(event.data).catch(() => undefined)
       );
       channel.addEventListener("open", () => {
-        if (this.openTimer) clearTimeout(this.openTimer);
+        if (this.openTimer) {
+          clearTimeout(this.openTimer);
+        }
         this.openTimer = undefined;
         this.retries = 0;
         microphone.enabled = !this.desiredMuted;
@@ -199,11 +231,15 @@ export class RealtimeClient {
       });
       channel.addEventListener("error", () => {
         this.diagnostic("channel_error");
-        if (this.channel === channel) void this.reconnect();
+        if (this.channel === channel) {
+          this.reconnect().catch(() => undefined);
+        }
       });
       channel.addEventListener("close", () => {
         this.diagnostic("channel_closed");
-        if (this.channel === channel) void this.reconnect();
+        if (this.channel === channel) {
+          this.reconnect().catch(() => undefined);
+        }
       });
       const negotiationStarted = performance.now();
       const offer = await pc.createOffer({ offerToReceiveAudio: true });
@@ -216,8 +252,9 @@ export class RealtimeClient {
         },
         method: "POST",
       });
-      if (!response.ok)
+      if (!response.ok) {
         throw new Error(`WEBRTC_NEGOTIATION_${response.status}`);
+      }
       await pc.setRemoteDescription(
         new RTCSessionDescription({
           sdp: await response.text(),
@@ -229,18 +266,27 @@ export class RealtimeClient {
         performance.now() - negotiationStarted
       );
       this.openTimer = setTimeout(() => {
-        if (channel.readyState !== "open") void this.reconnect();
+        if (channel.readyState !== "open") {
+          this.reconnect().catch(() => undefined);
+        }
       }, 15_000);
     } catch (error) {
       this.cleanup(false);
-      if (isRetryableConnectionError(error) && this.retries < 4 && !this.closed)
+      if (
+        isRetryableConnectionError(error) &&
+        this.retries < 4 &&
+        !this.closed
+      ) {
         return this.retry();
+      }
       this.fail(error instanceof Error ? error.message : "CONNECTION_FAILED");
     }
   }
   setMuted(muted: boolean) {
     this.desiredMuted = muted;
-    if (this.microphone) this.microphone.enabled = !muted;
+    if (this.microphone) {
+      this.microphone.enabled = !muted;
+    }
     this.listener({ muted });
   }
   setSpeaker(speaker: boolean) {
@@ -282,11 +328,14 @@ export class RealtimeClient {
     this.diagnostic(approve ? "mcp_action_approved" : "mcp_action_declined");
   }
   private send(event: Record<string, unknown>) {
-    if (this.channel?.readyState === "open")
+    if (this.channel?.readyState === "open") {
       this.channel.send(JSON.stringify(event));
+    }
   }
   private async inboundAudioBytes() {
-    if (!this.pc) return 0;
+    if (!this.pc) {
+      return 0;
+    }
     const stats = await this.pc.getStats();
     let bytes = 0;
     for (const report of stats.values()) {
@@ -294,26 +343,38 @@ export class RealtimeClient {
         report?.type === "inbound-rtp" &&
         (report.kind === "audio" || report.mediaType === "audio") &&
         typeof report.bytesReceived === "number"
-      )
+      ) {
         bytes += report.bytesReceived;
+      }
     }
     return bytes;
   }
   private async startResponseAudioMonitoring() {
-    if (this.statsTimer) clearInterval(this.statsTimer);
+    if (this.statsTimer) {
+      clearInterval(this.statsTimer);
+    }
     try {
       this.lastInboundAudioBytes = await this.inboundAudioBytes();
-    } catch {}
-    this.statsTimer = setInterval(() => void this.readInboundAudio(), 100);
+    } catch {
+      // Stats are optional diagnostics and may be unavailable initially.
+    }
+    this.statsTimer = setInterval(
+      () => this.readInboundAudio().catch(() => undefined),
+      100
+    );
   }
   private async readInboundAudio() {
-    if (!this.pc || this.statsReading || !this.responseActive) return;
+    if (!this.pc || this.statsReading || !this.responseActive) {
+      return;
+    }
     this.statsReading = true;
     try {
       const bytes = await this.inboundAudioBytes();
       if (!this.firstAudioSeen && bytes > this.lastInboundAudioBytes) {
         this.firstAudioSeen = true;
-        if (this.statsTimer) clearInterval(this.statsTimer);
+        if (this.statsTimer) {
+          clearInterval(this.statsTimer);
+        }
         this.statsTimer = undefined;
         this.diagnostic(
           "first_audio",
@@ -327,66 +388,115 @@ export class RealtimeClient {
       }
       this.lastInboundAudioBytes = Math.max(this.lastInboundAudioBytes, bytes);
     } catch {
+      // A transient stats failure must not interrupt response audio.
     } finally {
       this.statsReading = false;
     }
   }
   private persist(item: Parameters<typeof persistConversationItem>[1]) {
-    if (this.conversationId)
-      void persistConversationItem(this.conversationId, item).catch(() =>
+    if (this.conversationId) {
+      persistConversationItem(this.conversationId, item).catch(() =>
         this.listener({ error: "HISTORY_PERSIST_FAILED" })
       );
+    }
   }
   private async onEvent(raw: unknown) {
-    if (typeof raw !== "string") return;
-    let event: any;
+    if (typeof raw !== "string") {
+      return;
+    }
+    let event: unknown;
     try {
       event = JSON.parse(raw);
     } catch {
       return;
     }
-    if (!event || typeof event.type !== "string") return;
-    switch (event.type) {
+    if (!isRecord(event) || typeof event.type !== "string") {
+      return;
+    }
+    const eventType: string = event.type;
+    if (this.handleVoiceEvent(eventType, event)) {
+      return;
+    }
+    await this.handleIntegrationEvent(eventType, event);
+  }
+  private handleVoiceEvent(
+    eventType: string,
+    event: Record<string, unknown>
+  ): boolean {
+    switch (eventType) {
       case "input_audio_buffer.speech_started":
-        if (this.responseActive) this.diagnostic("interruption_detected");
+        if (this.responseActive) {
+          this.diagnostic("interruption_detected");
+        }
         this.userSpeaking = true;
         this.diagnostic("speech_started");
         this.state("listening");
-        break;
+        return true;
       case "input_audio_buffer.speech_stopped":
         this.userSpeaking = false;
         this.speechStoppedAt = performance.now();
         this.diagnostic("speech_stopped");
         this.state("thinking");
-        break;
+        return true;
+      default:
+        if (this.handleTranscriptionEvent(eventType, event)) {
+          return true;
+        }
+        return this.handleResponseEvent(eventType, event);
+    }
+  }
+  private handleTranscriptionEvent(
+    eventType: string,
+    event: Record<string, unknown>
+  ): boolean {
+    switch (eventType) {
       case "conversation.item.input_audio_transcription.delta":
         this.transcriptDelta(event, "user");
-        break;
+        return true;
       case "conversation.item.input_audio_transcription.completed":
         this.transcriptDone(event, "user");
-        break;
+        return true;
       case "conversation.item.input_audio_transcription.failed":
-        this.diagnostic("transcription_failed", undefined, event.error?.code);
+        this.diagnostic(
+          "transcription_failed",
+          undefined,
+          nestedString(event.error, "code")
+        );
         this.listener({
-          error:
-            typeof event.error?.code === "string"
-              ? event.error.code
-              : "TRANSCRIPTION_FAILED",
+          error: nestedString(event.error, "code") ?? "TRANSCRIPTION_FAILED",
         });
-        break;
+        return true;
+      case "response.output_audio_transcript.delta":
+        this.transcriptDelta(event, "assistant");
+        return true;
+      case "response.audio_transcript.done":
+      case "response.output_audio_transcript.done":
+        this.transcriptDone(event, "assistant");
+        return true;
+      default:
+        return false;
+    }
+  }
+  private handleResponseEvent(
+    eventType: string,
+    event: Record<string, unknown>
+  ): boolean {
+    switch (eventType) {
       case "response.created":
         this.responseActive = true;
         this.responseCreatedAt = performance.now();
         this.firstAudioSeen = false;
-        void this.startResponseAudioMonitoring();
+        this.startResponseAudioMonitoring().catch(() => undefined);
         this.diagnostic(
           "response_created",
           this.speechStoppedAt
             ? this.responseCreatedAt - this.speechStoppedAt
             : undefined
         );
-        if (!this.userSpeaking) this.state("thinking");
-        break;
+        if (!this.userSpeaking) {
+          this.state("thinking");
+        }
+        return true;
       case "response.audio.delta":
       case "response.output_audio.delta":
         if (!this.firstAudioSeen) {
@@ -401,28 +511,37 @@ export class RealtimeClient {
               : undefined
           );
         }
-        if (!this.userSpeaking) this.state("speaking");
-        break;
-      case "response.output_audio_transcript.delta":
-        this.transcriptDelta(event, "assistant");
-        break;
-      case "response.audio_transcript.done":
-      case "response.output_audio_transcript.done":
-        this.transcriptDone(event, "assistant");
-        break;
+        if (!this.userSpeaking) {
+          this.state("speaking");
+        }
+        return true;
       case "response.done":
-        this.responseActive = false;
-        if (this.statsTimer) clearInterval(this.statsTimer);
-        this.statsTimer = undefined;
-        this.diagnostic(
-          "response_done",
-          this.responseCreatedAt
-            ? performance.now() - this.responseCreatedAt
-            : undefined,
-          event.response?.status
-        );
-        this.state(this.userSpeaking ? "listening" : "connected");
-        break;
+        this.finishResponse(event);
+        return true;
+      default:
+        return false;
+    }
+  }
+  private finishResponse(event: Record<string, unknown>) {
+    this.responseActive = false;
+    if (this.statsTimer) {
+      clearInterval(this.statsTimer);
+    }
+    this.statsTimer = undefined;
+    this.diagnostic(
+      "response_done",
+      this.responseCreatedAt
+        ? performance.now() - this.responseCreatedAt
+        : undefined,
+      nestedString(event.response, "status")
+    );
+    this.state(this.userSpeaking ? "listening" : "connected");
+  }
+  private async handleIntegrationEvent(
+    eventType: string,
+    event: Record<string, unknown>
+  ) {
+    switch (eventType) {
       case "response.function_call_arguments.done":
         await this.handleTool(event);
         break;
@@ -443,8 +562,9 @@ export class RealtimeClient {
         if (
           typeof event.item_id === "string" &&
           !this.mcpStarted.has(event.item_id)
-        )
+        ) {
           this.mcpStarted.set(event.item_id, performance.now());
+        }
         break;
       case "response.mcp_call_arguments.done":
         this.handleMcpArguments(event);
@@ -453,24 +573,31 @@ export class RealtimeClient {
         this.handleMcpFailure(event);
         break;
       case "response.output_item.done":
-        if (event.item?.type === "mcp_call") this.handleMcpResult(event.item);
+        if (isRecord(event.item) && event.item.type === "mcp_call") {
+          this.handleMcpResult(event.item);
+        }
         break;
       case "error":
-        this.diagnostic("realtime_error", undefined, event.error?.code);
+        this.diagnostic(
+          "realtime_error",
+          undefined,
+          nestedString(event.error, "code")
+        );
         this.listener({
-          error:
-            typeof event.error?.code === "string"
-              ? event.error.code
-              : "REALTIME_ERROR",
+          error: nestedString(event.error, "code") ?? "REALTIME_ERROR",
         });
         break;
       default:
         break;
     }
   }
-  private transcriptDelta(event: any, role: "user" | "assistant") {
-    if (typeof event.item_id !== "string" || typeof event.delta !== "string")
+  private transcriptDelta(
+    event: Record<string, unknown>,
+    role: "user" | "assistant"
+  ) {
+    if (typeof event.item_id !== "string" || typeof event.delta !== "string") {
       return;
+    }
     const text =
       (this.streamingTranscripts.get(event.item_id) ?? "") + event.delta;
     this.streamingTranscripts.set(event.item_id, text);
@@ -478,26 +605,33 @@ export class RealtimeClient {
       transcript: { final: false, id: event.item_id, role, text },
     });
   }
-  private transcriptDone(event: any, role: "user" | "assistant") {
+  private transcriptDone(
+    event: Record<string, unknown>,
+    role: "user" | "assistant"
+  ) {
     if (
       typeof event.item_id !== "string" ||
       typeof event.transcript !== "string"
-    )
+    ) {
       return;
+    }
     const transcript = event.transcript.trim();
     this.streamingTranscripts.delete(event.item_id);
     this.listener({
       transcript: { final: true, id: event.item_id, role, text: transcript },
     });
-    if (transcript) this.persist({ kind: "transcript", role, transcript });
+    if (transcript) {
+      this.persist({ kind: "transcript", role, transcript });
+    }
   }
-  private async handleTool(event: any) {
+  private async handleTool(event: Record<string, unknown>) {
     if (
       typeof event.call_id !== "string" ||
       typeof event.name !== "string" ||
       typeof event.arguments !== "string"
-    )
+    ) {
       return;
+    }
     this.state("thinking");
     const started = performance.now();
     this.diagnostic("tool_started", undefined, event.name);
@@ -553,8 +687,10 @@ export class RealtimeClient {
     });
     this.send({ type: "response.create" });
   }
-  private handleMcpItem(item: any) {
-    if (!item || typeof item.type !== "string") return;
+  private handleMcpItem(item: unknown) {
+    if (!isRecord(item) || typeof item.type !== "string") {
+      return;
+    }
     if (item.type === "mcp_list_tools") {
       const count = Array.isArray(item.tools) ? item.tools.length : undefined;
       this.diagnostic(
@@ -568,8 +704,9 @@ export class RealtimeClient {
       item.type !== "mcp_approval_request" ||
       typeof item.id !== "string" ||
       typeof item.name !== "string"
-    )
+    ) {
       return;
+    }
     const approval = {
       arguments: typeof item.arguments === "string" ? item.arguments : "{}",
       id: item.id,
@@ -590,9 +727,10 @@ export class RealtimeClient {
       this.listener({ mcpApproval: approval });
     }
   }
-  private handleMcpArguments(event: any) {
-    if (typeof event.item_id !== "string" || typeof event.name !== "string")
+  private handleMcpArguments(event: Record<string, unknown>) {
+    if (typeof event.item_id !== "string" || typeof event.name !== "string") {
       return;
+    }
     this.mcpStarted.set(event.item_id, performance.now());
     const args = parseJson(event.arguments);
     this.diagnostic("tool_started", undefined, event.name);
@@ -608,8 +746,10 @@ export class RealtimeClient {
       role: "tool",
     });
   }
-  private handleMcpFailure(event: any) {
-    if (typeof event.item_id !== "string") return;
+  private handleMcpFailure(event: Record<string, unknown>) {
+    if (typeof event.item_id !== "string") {
+      return;
+    }
     const started = this.mcpStarted.get(event.item_id);
     this.mcpStarted.delete(event.item_id);
     this.diagnostic(
@@ -628,8 +768,10 @@ export class RealtimeClient {
     });
     this.listener({ error: "LINEAR_TOOL_FAILED" });
   }
-  private handleMcpResult(item: any) {
-    if (typeof item.id !== "string") return;
+  private handleMcpResult(item: Record<string, unknown>) {
+    if (typeof item.id !== "string") {
+      return;
+    }
     const started = this.mcpStarted.get(item.id);
     this.mcpStarted.delete(item.id);
     this.diagnostic(
@@ -658,10 +800,14 @@ export class RealtimeClient {
         Math.min(1000 * 2 ** (this.retries - 1), 8000) + Math.random() * 250
       )
     );
-    if (!this.closed) await this.connect(true);
+    if (!this.closed) {
+      await this.connect(true);
+    }
   }
   private async reconnect() {
-    if (this.closed || this.reconnecting) return;
+    if (this.closed || this.reconnecting) {
+      return;
+    }
     if (this.retries >= 4) {
       this.fail("RECONNECT_EXHAUSTED");
       return;
@@ -682,7 +828,7 @@ export class RealtimeClient {
       this.listener({ muted: false });
     }
     if (complete && this.conversationId) {
-      void finishConversation(this.conversationId, "completed").catch(() =>
+      finishConversation(this.conversationId, "completed").catch(() =>
         this.listener({ error: "HISTORY_PERSIST_FAILED" })
       );
       this.conversationId = undefined;
@@ -692,36 +838,47 @@ export class RealtimeClient {
   private fail(message: string) {
     this.state("error");
     this.listener({ error: message });
-    if (this.conversationId)
-      void finishConversation(this.conversationId, "failed").catch(
-        () => undefined
-      );
+    if (this.conversationId) {
+      finishConversation(this.conversationId, "failed").catch(() => undefined);
+    }
   }
   private cleanup(stop = true) {
-    if (this.openTimer) clearTimeout(this.openTimer);
+    if (this.openTimer) {
+      clearTimeout(this.openTimer);
+    }
     this.openTimer = undefined;
-    if (this.statsTimer) clearInterval(this.statsTimer);
+    if (this.statsTimer) {
+      clearInterval(this.statsTimer);
+    }
     this.statsTimer = undefined;
     this.lastInboundAudioBytes = 0;
     const { channel } = this;
     this.channel = undefined;
     try {
       channel?.close();
-    } catch {}
+    } catch {
+      // Data channel teardown is best-effort.
+    }
     const { pc } = this;
     this.pc = undefined;
     try {
       pc?.close();
-    } catch {}
+    } catch {
+      // Peer connection teardown is best-effort.
+    }
     for (const track of this.stream?.getTracks() ?? []) {
       try {
         track.stop();
-      } catch {}
+      } catch {
+        // Individual tracks can already be stopped.
+      }
     }
     for (const track of this.remote?.getTracks() ?? []) {
       try {
         track.stop();
-      } catch {}
+      } catch {
+        // Individual tracks can already be stopped.
+      }
     }
     stopAudioSession();
     this.stream = undefined;
@@ -731,7 +888,9 @@ export class RealtimeClient {
     this.streamingTranscripts.clear();
     this.mcpStarted.clear();
     this.listener({ mcpApproval: null });
-    if (stop) this.responseActive = false;
+    if (stop) {
+      this.responseActive = false;
+    }
   }
 }
 function isRetryableConnectionError(error: unknown) {
@@ -743,7 +902,9 @@ function isReadOnlyMcpTool(name: string) {
   return readOnlyMcpToolPattern.test(name);
 }
 function parseJson(value: unknown): unknown {
-  if (typeof value !== "string") return value;
+  if (typeof value !== "string") {
+    return value;
+  }
   try {
     return JSON.parse(value);
   } catch {

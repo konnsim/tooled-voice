@@ -5,9 +5,9 @@ import {
   toolCallRequestSchema,
 } from "@tooled-voice/shared";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { verifyAccessToken } from "../auth/verify-access-token.js";
-import { createDatabase } from "../database/client.js";
+import { createDatabase, type Database } from "../database/client.js";
 import {
   conversationItems,
   conversations,
@@ -25,13 +25,154 @@ import {
   linearMobileRedirectUri,
 } from "../integrations/linear-service.js";
 import { logger } from "../logging/logger.js";
-import { createRealtimeSession } from "../realtime/create-session.js";
+import {
+  createRealtimeSession,
+  type RealtimeMcpConnection,
+} from "../realtime/create-session.js";
 import { dispatchTool } from "../tools/dispatch.js";
 
 const bearerPrefixPattern = /^Bearer\s+/i;
 interface Variables {
   requestId: string;
   user: Awaited<ReturnType<typeof verifyAccessToken>>;
+}
+type AppContext = Context<{ Variables: Variables }>;
+function composioProxyInput(
+  c: AppContext
+): { apiKey: string; url: URL } | Response {
+  const authorization = c.req.header("authorization");
+  const apiKey = authorization?.replace(bearerPrefixPattern, "");
+  const target = c.req.query("target");
+  const signature = c.req.query("signature");
+  if (!(apiKey && target && signature)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  let url: URL;
+  try {
+    url = new URL(target);
+  } catch {
+    return c.json({ error: "Invalid target" }, 400);
+  }
+  if (url.protocol !== "https:" || url.hostname !== "backend.composio.dev") {
+    return c.json({ error: "Invalid target" }, 400);
+  }
+  const expected = signComposioTarget(target, apiKey);
+  const supplied = Buffer.from(signature);
+  const valid =
+    supplied.length === Buffer.byteLength(expected) &&
+    timingSafeEqual(supplied, Buffer.from(expected));
+  return valid ? { apiKey, url } : c.json({ error: "Unauthorized" }, 401);
+}
+async function proxyComposio(c: AppContext): Promise<Response> {
+  const input = composioProxyInput(c);
+  if (input instanceof Response) {
+    return input;
+  }
+  const headers = new Headers({
+    Accept: c.req.header("accept") ?? "application/json, text/event-stream",
+    "Content-Type": c.req.header("content-type") ?? "application/json",
+    "x-api-key": input.apiKey,
+  });
+  for (const name of ["mcp-session-id", "last-event-id"]) {
+    const value = c.req.header(name);
+    if (value) {
+      headers.set(name, value);
+    }
+  }
+  const hasBody = !["GET", "HEAD"].includes(c.req.method);
+  const response = await fetch(input.url, {
+    headers,
+    method: c.req.method,
+    ...(hasBody ? { body: Buffer.from(await c.req.arrayBuffer()) } : {}),
+    redirect: "error",
+    signal: c.req.raw.signal,
+  });
+  const outgoing = new Headers();
+  for (const name of ["content-type", "mcp-session-id", "retry-after"]) {
+    const value = response.headers.get(name);
+    if (value) {
+      outgoing.set(name, value);
+    }
+  }
+  return new Response(response.body, {
+    headers: outgoing,
+    status: response.status,
+  });
+}
+async function realtimeMcpConnection(
+  composio: ComposioService,
+  linear: LinearService,
+  userId: string,
+  signal: AbortSignal,
+  toolSettings: ToolSettings,
+  approvalPolicy: "ask" | "automatic"
+): Promise<{
+  connection: RealtimeMcpConnection | undefined;
+  provider: "composio" | "linear" | undefined;
+}> {
+  const composioMcp = await composio.mcp(userId, signal, toolSettings);
+  if (composioMcp) {
+    return {
+      connection: {
+        approvalPolicy,
+        authorization: composioMcp.authorization,
+        label: "composio",
+        url: composioMcp.url,
+      },
+      provider: "composio",
+    };
+  }
+  const linearConnection = await linear.sessionConnection(userId, signal);
+  return linearConnection
+    ? {
+        connection: {
+          approvalPolicy,
+          authorization: linearConnection.accessToken,
+          label: "linear",
+          url: "https://mcp.linear.app/mcp",
+        },
+        provider: "linear",
+      }
+    : { connection: undefined, provider: undefined };
+}
+async function realtimeConversation(
+  database: Database,
+  userId: string,
+  requestedId: unknown,
+  realtimeSessionId: string | undefined
+): Promise<string> {
+  if (typeof requestedId === "string") {
+    const [owned] = await database
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.id, requestedId),
+          eq(conversations.userId, userId),
+          eq(conversations.status, "active")
+        )
+      )
+      .limit(1);
+    if (owned) {
+      await database
+        .update(conversations)
+        .set({ realtimeSessionId, updatedAt: new Date() })
+        .where(eq(conversations.id, owned.id));
+      return owned.id;
+    }
+  }
+  const [created] = await database
+    .insert(conversations)
+    .values({ realtimeSessionId, userId })
+    .returning({ id: conversations.id });
+  if (!created) {
+    throw new ApiError(
+      "INTERNAL_ERROR",
+      "Failed to create the conversation",
+      500
+    );
+  }
+  return created.id;
 }
 export function createApp(database = createDatabase()) {
   const app = new Hono<{ Variables: Variables }>();
@@ -77,54 +218,7 @@ export function createApp(database = createDatabase()) {
       return c.json({ database: "unavailable", ok: false }, 503);
     }
   });
-  app.all("/api/mcp/composio", async (c) => {
-    const authorization = c.req.header("authorization");
-    const apiKey = authorization?.replace(bearerPrefixPattern, "");
-    const target = c.req.query("target");
-    const signature = c.req.query("signature");
-    if (!(apiKey && target && signature))
-      return c.json({ error: "Unauthorized" }, 401);
-    let url: URL;
-    try {
-      url = new URL(target);
-    } catch {
-      return c.json({ error: "Invalid target" }, 400);
-    }
-    if (url.protocol !== "https:" || url.hostname !== "backend.composio.dev")
-      return c.json({ error: "Invalid target" }, 400);
-    const expected = signComposioTarget(target, apiKey);
-    const supplied = Buffer.from(signature);
-    const valid =
-      supplied.length === Buffer.byteLength(expected) &&
-      timingSafeEqual(supplied, Buffer.from(expected));
-    if (!valid) return c.json({ error: "Unauthorized" }, 401);
-    const headers = new Headers({
-      Accept: c.req.header("accept") ?? "application/json, text/event-stream",
-      "Content-Type": c.req.header("content-type") ?? "application/json",
-      "x-api-key": apiKey,
-    });
-    for (const name of ["mcp-session-id", "last-event-id"]) {
-      const value = c.req.header(name);
-      if (value) headers.set(name, value);
-    }
-    const hasBody = !["GET", "HEAD"].includes(c.req.method);
-    const response = await fetch(url, {
-      headers,
-      method: c.req.method,
-      ...(hasBody ? { body: Buffer.from(await c.req.arrayBuffer()) } : {}),
-      redirect: "error",
-      signal: c.req.raw.signal,
-    });
-    const outgoing = new Headers();
-    for (const name of ["content-type", "mcp-session-id", "retry-after"]) {
-      const value = response.headers.get(name);
-      if (value) outgoing.set(name, value);
-    }
-    return new Response(response.body, {
-      headers: outgoing,
-      status: response.status,
-    });
-  });
+  app.all("/api/mcp/composio", proxyComposio);
   app.use("/api/*", async (c, next) => {
     const requestId = c.req.header("x-request-id") ?? randomUUID();
     c.set("requestId", requestId);
@@ -171,79 +265,30 @@ export function createApp(database = createDatabase()) {
           ? ("automatic" as const)
           : ("ask" as const);
       const toolSettings = (profile?.toolSettings ?? {}) as ToolSettings;
-      const composioMcp = await composio.mcp(
+      const mcp = await realtimeMcpConnection(
+        composio,
+        linear,
         userId,
         c.req.raw.signal,
-        toolSettings
+        toolSettings,
+        approvalPolicy
       );
-      const linearConnection = composioMcp
-        ? null
-        : await linear.sessionConnection(userId, c.req.raw.signal);
-      const mcpConnection = composioMcp
-        ? {
-            approvalPolicy,
-            authorization: composioMcp.authorization,
-            label: "composio",
-            url: composioMcp.url,
-          }
-        : linearConnection
-          ? {
-              approvalPolicy,
-              authorization: linearConnection.accessToken,
-              label: "linear",
-              url: "https://mcp.linear.app/mcp",
-            }
-          : undefined;
       const session = await createRealtimeSession(
         userId,
         c.req.raw.signal,
-        mcpConnection
+        mcp.connection
       );
-      let conversationId: string | undefined;
-      if (typeof body.conversationId === "string") {
-        const owned = await database
-          .select({ id: conversations.id })
-          .from(conversations)
-          .where(
-            and(
-              eq(conversations.id, body.conversationId),
-              eq(conversations.userId, userId),
-              eq(conversations.status, "active")
-            )
-          )
-          .limit(1);
-        conversationId = owned[0]?.id;
-        if (conversationId)
-          await database
-            .update(conversations)
-            .set({
-              realtimeSessionId: session.sessionId,
-              updatedAt: new Date(),
-            })
-            .where(eq(conversations.id, conversationId));
-      }
-      if (!conversationId) {
-        const [created] = await database
-          .insert(conversations)
-          .values({ realtimeSessionId: session.sessionId, userId })
-          .returning({ id: conversations.id });
-        if (!created)
-          throw new ApiError(
-            "INTERNAL_ERROR",
-            "Failed to create the conversation",
-            500
-          );
-        conversationId = created.id;
-      }
+      const conversationId = await realtimeConversation(
+        database,
+        userId,
+        body.conversationId,
+        session.sessionId
+      );
       logger.info(
         {
           conversationId,
           durationMs: Date.now() - started,
-          mcpProvider: composioMcp
-            ? "composio"
-            : linearConnection
-              ? "linear"
-              : undefined,
+          mcpProvider: mcp.provider,
           realtimeSessionId: session.sessionId,
           requestId: c.var.requestId,
           status: "succeeded",
@@ -306,7 +351,9 @@ export function createApp(database = createDatabase()) {
       const item = connections.find(
         (connection) => connection.slug === "linear"
       );
-      if (item) item.connected = true;
+      if (item) {
+        item.connected = true;
+      }
     }
     return c.json({
       accounts,
@@ -329,7 +376,7 @@ export function createApp(database = createDatabase()) {
   );
   app.get("/api/integrations/:toolkit/tools", async (c) => {
     const toolkit = parseComposioToolkit(c.req.param("toolkit"));
-    if (!toolkit)
+    if (!toolkit) {
       return c.json(
         {
           error: {
@@ -341,6 +388,7 @@ export function createApp(database = createDatabase()) {
         },
         400
       );
+    }
     return c.json({
       tools: await composio.tools(c.var.user.id, toolkit, c.req.raw.signal),
     });
@@ -361,7 +409,7 @@ export function createApp(database = createDatabase()) {
       !body.connectedAccountIds.every((value) => typeof value === "string") ||
       !Array.isArray(body.disabledTools) ||
       !body.disabledTools.every((value) => typeof value === "string")
-    )
+    ) {
       return c.json(
         {
           error: {
@@ -373,6 +421,7 @@ export function createApp(database = createDatabase()) {
         },
         400
       );
+    }
     const [profile] = await database
       .select({ toolSettings: userProfiles.toolSettings })
       .from(userProfiles)
@@ -393,7 +442,7 @@ export function createApp(database = createDatabase()) {
   });
   app.post("/api/integrations/accounts/:id/:action", async (c) => {
     const action = c.req.param("action");
-    if (action !== "enable" && action !== "disable" && action !== "refresh")
+    if (action !== "enable" && action !== "disable" && action !== "refresh") {
       return c.json(
         {
           error: {
@@ -405,6 +454,7 @@ export function createApp(database = createDatabase()) {
         },
         400
       );
+    }
     await composio.setAccountState(
       c.var.user.id,
       c.req.param("id"),
@@ -415,7 +465,7 @@ export function createApp(database = createDatabase()) {
   });
   app.post("/api/integrations/:toolkit/connect", async (c) => {
     const toolkit = parseComposioToolkit(c.req.param("toolkit"));
-    if (!toolkit)
+    if (!toolkit) {
       return c.json(
         {
           error: {
@@ -427,8 +477,10 @@ export function createApp(database = createDatabase()) {
         },
         400
       );
-    if (!composio.configured && toolkit === "linear")
+    }
+    if (!composio.configured && toolkit === "linear") {
       return c.json(await linear.createAuthorization(c.var.user.id));
+    }
     return c.json(
       await composio.connect(
         c.var.user.id,
@@ -440,7 +492,7 @@ export function createApp(database = createDatabase()) {
   });
   app.delete("/api/integrations/:toolkit", async (c) => {
     const toolkit = parseComposioToolkit(c.req.param("toolkit"));
-    if (!toolkit)
+    if (!toolkit) {
       return c.json(
         {
           error: {
@@ -452,16 +504,22 @@ export function createApp(database = createDatabase()) {
         },
         400
       );
-    if (!composio.configured && toolkit === "linear")
+    }
+    if (!composio.configured && toolkit === "linear") {
       await linear.disconnect(c.var.user.id, c.req.raw.signal);
-    else await composio.disconnect(c.var.user.id, toolkit, c.req.raw.signal);
+    } else {
+      await composio.disconnect(c.var.user.id, toolkit, c.req.raw.signal);
+    }
     return c.body(null, 204);
   });
   app.put("/api/integrations/approval-policy", async (c) => {
     const body = (await c.req.json().catch(() => null)) as {
       approvalPolicy?: unknown;
     } | null;
-    if (body?.approvalPolicy !== "ask" && body?.approvalPolicy !== "automatic")
+    if (
+      body?.approvalPolicy !== "ask" &&
+      body?.approvalPolicy !== "automatic"
+    ) {
       return c.json(
         {
           error: {
@@ -473,6 +531,7 @@ export function createApp(database = createDatabase()) {
         },
         400
       );
+    }
     await database
       .insert(userProfiles)
       .values({ id: c.var.user.id, toolApprovalPolicy: body.approvalPolicy })
@@ -492,7 +551,10 @@ export function createApp(database = createDatabase()) {
     const body = (await c.req.json().catch(() => null)) as {
       approvalPolicy?: unknown;
     } | null;
-    if (body?.approvalPolicy !== "ask" && body?.approvalPolicy !== "automatic")
+    if (
+      body?.approvalPolicy !== "ask" &&
+      body?.approvalPolicy !== "automatic"
+    ) {
       return c.json(
         {
           error: {
@@ -504,6 +566,7 @@ export function createApp(database = createDatabase()) {
         },
         400
       );
+    }
     await linear.setApprovalPolicy(c.var.user.id, body.approvalPolicy);
     return c.json(await linear.status(c.var.user.id));
   });
@@ -546,7 +609,7 @@ export function createApp(database = createDatabase()) {
     const parsed = conversationStatusInputSchema.safeParse(
       await c.req.json().catch(() => null)
     );
-    if (!parsed.success)
+    if (!parsed.success) {
       return c.json(
         {
           error: {
@@ -558,6 +621,7 @@ export function createApp(database = createDatabase()) {
         },
         400
       );
+    }
     const [updated] = await database
       .update(conversations)
       .set({ status: parsed.data.status, updatedAt: new Date() })
@@ -568,7 +632,7 @@ export function createApp(database = createDatabase()) {
         )
       )
       .returning({ id: conversations.id });
-    if (!updated)
+    if (!updated) {
       return c.json(
         {
           error: {
@@ -580,6 +644,7 @@ export function createApp(database = createDatabase()) {
         },
         404
       );
+    }
     return c.json({ ok: true });
   });
   app.post("/api/conversations/:id/items", async (c) => {
@@ -600,7 +665,7 @@ export function createApp(database = createDatabase()) {
       );
     }
     const parsed = conversationItemInputSchema.safeParse(body);
-    if (!parsed.success)
+    if (!parsed.success) {
       return c.json(
         {
           error: {
@@ -612,6 +677,7 @@ export function createApp(database = createDatabase()) {
         },
         400
       );
+    }
     const id = c.req.param("id");
     const owned = await database
       .select({ id: conversations.id })
@@ -620,7 +686,7 @@ export function createApp(database = createDatabase()) {
         and(eq(conversations.id, id), eq(conversations.userId, c.var.user.id))
       )
       .limit(1);
-    if (!owned[0])
+    if (!owned[0]) {
       return c.json(
         {
           error: {
@@ -632,6 +698,7 @@ export function createApp(database = createDatabase()) {
         },
         404
       );
+    }
     const item = await database.transaction(async (transaction) => {
       await transaction.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${id}, 0))`
@@ -671,7 +738,7 @@ export function createApp(database = createDatabase()) {
       );
     }
     const parsed = toolCallRequestSchema.safeParse(body);
-    if (!parsed.success)
+    if (!parsed.success) {
       return c.json(
         {
           callId:
@@ -690,6 +757,7 @@ export function createApp(database = createDatabase()) {
         },
         400
       );
+    }
     const result = await dispatchTool(parsed.data, {
       database,
       logger,
@@ -718,14 +786,29 @@ export function createApp(database = createDatabase()) {
 function toolHttpStatus(
   code: string
 ): 400 | 401 | 403 | 404 | 409 | 429 | 500 | 502 | 504 {
-  if (code === "UNKNOWN_TOOL") return 404;
-  if (code === "PERMISSION_DENIED") return 403;
-  if (code === "INTEGRATION_UNAVAILABLE" || code === "TOOL_IN_PROGRESS")
+  if (code === "UNKNOWN_TOOL") {
+    return 404;
+  }
+  if (code === "PERMISSION_DENIED") {
+    return 403;
+  }
+  if (code === "INTEGRATION_UNAVAILABLE" || code === "TOOL_IN_PROGRESS") {
     return 409;
-  if (code === "INTEGRATION_AUTH_EXPIRED") return 401;
-  if (code === "PROVIDER_RATE_LIMITED") return 429;
-  if (code === "PROVIDER_UNAVAILABLE") return 502;
-  if (code === "TOOL_TIMEOUT") return 504;
-  if (code === "TOOL_EXECUTION_FAILED" || code === "INTERNAL_ERROR") return 500;
+  }
+  if (code === "INTEGRATION_AUTH_EXPIRED") {
+    return 401;
+  }
+  if (code === "PROVIDER_RATE_LIMITED") {
+    return 429;
+  }
+  if (code === "PROVIDER_UNAVAILABLE") {
+    return 502;
+  }
+  if (code === "TOOL_TIMEOUT") {
+    return 504;
+  }
+  if (code === "TOOL_EXECUTION_FAILED" || code === "INTERNAL_ERROR") {
+    return 500;
+  }
   return 400;
 }

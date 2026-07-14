@@ -2,8 +2,9 @@ import { serve } from "@hono/node-server";
 import { createApp } from "./http/app.js";
 
 const port = Number(process.env.PORT ?? 3000);
-if (!Number.isInteger(port) || port < 1 || port > 65_535)
+if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   throw new Error("PORT must be a valid TCP port");
+}
 
 const server = serve(
   { fetch: createApp().fetch, hostname: "0.0.0.0", port },

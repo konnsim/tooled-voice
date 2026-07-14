@@ -5,8 +5,8 @@ export interface AuthenticatedUser {
   permissions: ReadonlySet<string>;
 }
 export interface Logger {
-  error(data: Record<string, unknown>, message: string): void;
-  info(data: Record<string, unknown>, message: string): void;
+  error: (data: Record<string, unknown>, message: string) => void;
+  info: (data: Record<string, unknown>, message: string) => void;
 }
 export interface ToolExecutionContext {
   database: Database;
@@ -20,7 +20,10 @@ export interface ToolDefinition<
   O extends z.ZodType | undefined = undefined,
 > {
   description: string;
-  execute(input: z.output<I>, context: ToolExecutionContext): Promise<unknown>;
+  execute: (
+    input: z.output<I>,
+    context: ToolExecutionContext
+  ) => Promise<unknown>;
   input: I;
   name: string;
   output?: O;
@@ -29,7 +32,7 @@ export interface ToolDefinition<
 }
 export interface RegisteredToolDefinition {
   description: string;
-  execute(input: unknown, context: ToolExecutionContext): Promise<unknown>;
+  execute: (input: unknown, context: ToolExecutionContext) => Promise<unknown>;
   input: z.ZodType;
   name: string;
   output?: z.ZodType;

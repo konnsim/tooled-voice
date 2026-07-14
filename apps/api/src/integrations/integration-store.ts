@@ -39,7 +39,9 @@ export class IntegrationStore {
         )
       )
       .limit(1);
-    if (!row) return null;
+    if (!row) {
+      return null;
+    }
     const plaintext = decryptToken(
       {
         ciphertext: row.encryptedCredentials,

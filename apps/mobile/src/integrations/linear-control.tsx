@@ -52,7 +52,7 @@ export function ToolIntegrationControl() {
     return state;
   }, []);
   useEffect(() => {
-    void refresh().catch((reason) => setError(message(reason)));
+    refresh().catch((reason) => setError(message(reason)));
     const restoreInitialConnection = async () => {
       try {
         const value = await Linking.getInitialURL();
@@ -68,18 +68,20 @@ export function ToolIntegrationControl() {
         setError(message(reason));
       }
     };
-    void restoreInitialConnection();
+    restoreInitialConnection().catch((reason) => setError(message(reason)));
   }, [refresh]);
   const connected =
     accounts.filter((account) => account.active).length ||
     connections.filter((connection) => connection.connected).length;
+  const openManager = useCallback(() => setOpen(true), []);
+  const closeManager = useCallback(() => setOpen(false), []);
   return (
     <>
       <Pressable
         accessibilityLabel="Manage connected tools"
         accessibilityRole="button"
-        onPress={() => setOpen(true)}
-        style={({ pressed }) => [styles.launch, pressed && styles.pressed]}
+        onPress={openManager}
+        style={launchStyle}
       >
         <View>
           <Text style={styles.eyebrow}>TOOLS / CONNECTIONS</Text>
@@ -91,11 +93,7 @@ export function ToolIntegrationControl() {
         </View>
         <Text style={styles.launchAction}>MANAGE →</Text>
       </Pressable>
-      <Modal
-        animationType="slide"
-        onRequestClose={() => setOpen(false)}
-        visible={open}
-      >
+      <Modal animationType="slide" onRequestClose={closeManager} visible={open}>
         <ToolManager
           accounts={accounts}
           approvalPolicy={approvalPolicy}
@@ -104,7 +102,7 @@ export function ToolIntegrationControl() {
           connectionMessage={connectionMessage}
           connections={connections}
           error={error}
-          onClose={() => setOpen(false)}
+          onClose={closeManager}
           onRefresh={refresh}
           setApprovalPolicy={setApprovalPolicy}
           setBusy={setBusy}
@@ -127,16 +125,16 @@ function ToolManager(props: {
   busy: boolean;
   error: string | undefined;
   connectionMessage: string | undefined;
-  onClose(): void;
-  onRefresh(): Promise<{
+  onClose: () => void;
+  onRefresh: () => Promise<{
     connections: ToolConnection[];
     accounts: ToolAccount[];
   }>;
-  setBusy(value: boolean): void;
-  setError(value: string | undefined): void;
-  setConnectionMessage(value: string | undefined): void;
-  setApprovalPolicy(value: ToolApprovalPolicy): void;
-  setSettings(value: ToolSettings): void;
+  setBusy: (value: boolean) => void;
+  setError: (value: string | undefined) => void;
+  setConnectionMessage: (value: string | undefined) => void;
+  setApprovalPolicy: (value: ToolApprovalPolicy) => void;
+  setSettings: (value: ToolSettings) => void;
 }) {
   const [query, setQuery] = useState("");
   const [catalog, setCatalog] = useState<ToolConnection[]>(props.connections);
@@ -151,7 +149,7 @@ function ToolManager(props: {
       return;
     }
     const timer = setTimeout(() => {
-      void searchToolCatalog(query.trim())
+      searchToolCatalog(query.trim())
         .then((result) => setCatalog(result.items))
         .catch((reason) => props.setError(message(reason)));
     }, 250);
@@ -167,106 +165,173 @@ function ToolManager(props: {
         : [],
     [props.accounts, selected]
   );
-  const setting = selected ? (props.settings[selected.slug] ?? {}) : {};
-  const disabled = new Set(setting.disabledTools ?? []);
-  async function run(action: () => Promise<unknown>) {
-    props.setBusy(true);
-    props.setError(undefined);
-    try {
-      await action();
-      await props.onRefresh();
-    } catch (reason) {
-      props.setError(message(reason));
-    } finally {
-      props.setBusy(false);
-    }
-  }
-  async function connect(toolkit: string) {
-    props.setBusy(true);
-    props.setError(undefined);
-    props.setConnectionMessage("Waiting for authentication in your browser…");
-    try {
-      const { authorizationUrl, connectionId } =
-        await beginToolConnection(toolkit);
-      const result = await openAuthSessionAsync(
-        authorizationUrl,
-        integrationCallbackUrl,
-        {
-          enableDefaultShareMenuItem: false,
-          secondaryToolbarColor: base,
-          showTitle: true,
-          toolbarColor: base,
+  const setting = useMemo(
+    () => (selected ? (props.settings[selected.slug] ?? {}) : {}),
+    [props.settings, selected]
+  );
+  const disabled = useMemo(
+    () => new Set(setting.disabledTools ?? []),
+    [setting.disabledTools]
+  );
+  const run = useCallback(
+    async (action: () => Promise<unknown>) => {
+      props.setBusy(true);
+      props.setError(undefined);
+      try {
+        await action();
+        await props.onRefresh();
+      } catch (reason) {
+        props.setError(message(reason));
+      } finally {
+        props.setBusy(false);
+      }
+    },
+    [props]
+  );
+  const connect = useCallback(
+    async (toolkit: string) => {
+      props.setBusy(true);
+      props.setError(undefined);
+      props.setConnectionMessage("Waiting for authentication in your browser…");
+      try {
+        const { authorizationUrl, connectionId } =
+          await beginToolConnection(toolkit);
+        const result = await openAuthSessionAsync(
+          authorizationUrl,
+          integrationCallbackUrl,
+          {
+            enableDefaultShareMenuItem: false,
+            secondaryToolbarColor: base,
+            showTitle: true,
+            toolbarColor: base,
+          }
+        );
+        props.setConnectionMessage(
+          result.type === "success"
+            ? "Authentication returned. Checking account status…"
+            : "Checking whether the connection completed…"
+        );
+        const state = await props.onRefresh();
+        const account = connectionId
+          ? state.accounts.find((candidate) => candidate.id === connectionId)
+          : undefined;
+        const toolkitConnected = state.connections.some(
+          (candidate) => candidate.slug === toolkit && candidate.connected
+        );
+        if (account?.active || (!connectionId && toolkitConnected)) {
+          props.setConnectionMessage("Connection complete.");
+        } else if (
+          account &&
+          ["FAILED", "EXPIRED", "REVOKED"].includes(account.status)
+        ) {
+          props.setConnectionMessage(
+            `Connection failed: ${account.status.toLowerCase()}. Try again when ready.`
+          );
+        } else if (result.type === "success") {
+          props.setConnectionMessage(
+            "Authentication returned, but the connection is still pending."
+          );
+        } else {
+          props.setConnectionMessage(
+            "Connection was not completed. You can try again when ready."
+          );
         }
-      );
-      props.setConnectionMessage(
-        result.type === "success"
-          ? "Authentication returned. Checking account status…"
-          : "Checking whether the connection completed…"
-      );
-      const state = await props.onRefresh();
-      const account = connectionId
-        ? state.accounts.find((candidate) => candidate.id === connectionId)
-        : undefined;
-      const toolkitConnected = state.connections.some(
-        (candidate) => candidate.slug === toolkit && candidate.connected
-      );
-      if (account?.active || (!connectionId && toolkitConnected))
-        props.setConnectionMessage("Connection complete.");
-      else if (
-        account &&
-        ["FAILED", "EXPIRED", "REVOKED"].includes(account.status)
-      )
-        props.setConnectionMessage(
-          `Connection failed: ${account.status.toLowerCase()}. Try again when ready.`
-        );
-      else if (result.type === "success")
-        props.setConnectionMessage(
-          "Authentication returned, but the connection is still pending."
-        );
-      else
-        props.setConnectionMessage(
-          "Connection was not completed. You can try again when ready."
-        );
-    } catch (reason) {
-      props.setConnectionMessage(undefined);
-      props.setError(message(reason));
-    } finally {
-      props.setBusy(false);
-    }
-  }
-  async function choose(connection: ToolConnection) {
-    setSelected(connection);
-    setTools([]);
-    if (!props.configured) return;
-    setToolsBusy(true);
-    try {
-      setTools((await getToolkitTools(connection.slug)).tools);
-    } catch (reason) {
-      props.setError(message(reason));
-    } finally {
-      setToolsBusy(false);
-    }
-  }
-  async function save(patch: Partial<Required<typeof setting>>) {
-    if (!selected) return;
-    const next = {
-      approvalPolicy:
-        patch.approvalPolicy ?? setting.approvalPolicy ?? props.approvalPolicy,
-      connectedAccountIds:
-        patch.connectedAccountIds ??
-        setting.connectedAccountIds ??
-        selectedAccounts
-          .filter((account) => account.active)
-          .map((account) => account.id),
-      disabledTools: patch.disabledTools ?? setting.disabledTools ?? [],
-      enabled: patch.enabled ?? setting.enabled ?? true,
-    };
-    props.setSettings({ ...props.settings, [selected.slug]: next });
-    await run(() => setToolkitPreferences(selected.slug, next));
-  }
+      } catch (reason) {
+        props.setConnectionMessage(undefined);
+        props.setError(message(reason));
+      } finally {
+        props.setBusy(false);
+      }
+    },
+    [props]
+  );
+  const choose = useCallback(
+    async (connection: ToolConnection) => {
+      setSelected(connection);
+      setTools([]);
+      if (!props.configured) {
+        return;
+      }
+      setToolsBusy(true);
+      try {
+        setTools((await getToolkitTools(connection.slug)).tools);
+      } catch (reason) {
+        props.setError(message(reason));
+      } finally {
+        setToolsBusy(false);
+      }
+    },
+    [props.configured, props.setError]
+  );
+  const save = useCallback(
+    async (patch: Partial<Required<typeof setting>>) => {
+      if (!selected) {
+        return;
+      }
+      const next = {
+        approvalPolicy:
+          patch.approvalPolicy ??
+          setting.approvalPolicy ??
+          props.approvalPolicy,
+        connectedAccountIds:
+          patch.connectedAccountIds ??
+          setting.connectedAccountIds ??
+          selectedAccounts
+            .filter((account) => account.active)
+            .map((account) => account.id),
+        disabledTools: patch.disabledTools ?? setting.disabledTools ?? [],
+        enabled: patch.enabled ?? setting.enabled ?? true,
+      };
+      props.setSettings({ ...props.settings, [selected.slug]: next });
+      await run(() => setToolkitPreferences(selected.slug, next));
+    },
+    [props, run, selected, selectedAccounts, setting]
+  );
   const activeAccounts = selectedAccounts.filter((account) => account.active);
   const pendingAccounts = selectedAccounts.filter(
     (account) => account.status === "INITIATED"
+  );
+  let connectionStatus = "NOT CONNECTED";
+  let connectLabel = "CONNECT ACCOUNT";
+  if (activeAccounts.length) {
+    connectionStatus = `${activeAccounts.length} ACCOUNT${activeAccounts.length === 1 ? "" : "S"} LIVE`;
+    connectLabel = "ADD ANOTHER ACCOUNT";
+  } else if (pendingAccounts.length) {
+    connectionStatus = "CONNECTION PENDING";
+    connectLabel = "TRY CONNECTION AGAIN";
+  }
+  const clearSelection = useCallback(() => setSelected(undefined), []);
+  const connectSelected = useCallback(
+    () => (selected ? connect(selected.slug) : Promise.resolve()),
+    [connect, selected]
+  );
+  const toggleEnabled = useCallback(
+    () => save({ enabled: setting.enabled === false }),
+    [save, setting.enabled]
+  );
+  const requireApproval = useCallback(
+    () => save({ approvalPolicy: "ask" }),
+    [save]
+  );
+  const allowChanges = useCallback(
+    () => save({ approvalPolicy: "automatic" }),
+    [save]
+  );
+  const setDefaultApproval = useCallback(
+    (approvalPolicy: ToolApprovalPolicy) =>
+      run(async () => {
+        const result = await setToolApprovalPolicy(approvalPolicy);
+        props.setApprovalPolicy(result.approvalPolicy);
+      }),
+    [props.setApprovalPolicy, run]
+  );
+  const requireDefaultApproval = useCallback(
+    () => setDefaultApproval("ask"),
+    [setDefaultApproval]
+  );
+  const allowDefaultChanges = useCallback(
+    () => setDefaultApproval("automatic"),
+    [setDefaultApproval]
   );
   return (
     <View style={styles.screen}>
@@ -289,79 +354,31 @@ function ToolManager(props: {
       ) : null}
       {selected ? (
         <ScrollView contentContainerStyle={styles.detail}>
-          <Pressable onPress={() => setSelected(undefined)}>
+          <Pressable onPress={clearSelection}>
             <Text style={styles.back}>← ALL TOOLS</Text>
           </Pressable>
           <Text style={styles.detailTitle}>{selected.name}</Text>
-          <Text style={styles.detailMeta}>
-            {activeAccounts.length
-              ? `${activeAccounts.length} ACCOUNT${activeAccounts.length === 1 ? "" : "S"} LIVE`
-              : pendingAccounts.length
-                ? "CONNECTION PENDING"
-                : "NOT CONNECTED"}
-          </Text>
+          <Text style={styles.detailMeta}>{connectionStatus}</Text>
           <Pressable
             disabled={props.busy}
-            onPress={() => void connect(selected.slug)}
+            onPress={connectSelected}
             style={[styles.primary, props.busy && styles.primaryDisabled]}
           >
-            <Text style={styles.primaryText}>
-              {activeAccounts.length
-                ? "ADD ANOTHER ACCOUNT"
-                : pendingAccounts.length
-                  ? "TRY CONNECTION AGAIN"
-                  : "CONNECT ACCOUNT"}
-            </Text>
+            <Text style={styles.primaryText}>{connectLabel}</Text>
           </Pressable>
           {selectedAccounts.map((account) => (
-            <View key={account.id} style={styles.account}>
-              <View>
-                <Text style={styles.accountName}>
-                  {account.alias || `${selected.name} account`}
-                </Text>
-                <Text
-                  style={[
-                    styles.accountStatus,
-                    account.active && styles.active,
-                  ]}
-                >
-                  {account.status}
-                </Text>
-              </View>
-              {account.status === "INITIATED" ? null : (
-                <View style={styles.rowActions}>
-                  {account.active ? null : (
-                    <Pressable
-                      onPress={() =>
-                        void run(() => updateToolAccount(account.id, "refresh"))
-                      }
-                    >
-                      <Text style={styles.smallAction}>RECONNECT</Text>
-                    </Pressable>
-                  )}
-                  <Pressable
-                    onPress={() =>
-                      void run(() =>
-                        updateToolAccount(
-                          account.id,
-                          account.active ? "disable" : "enable"
-                        )
-                      )
-                    }
-                  >
-                    <Text style={styles.smallAction}>
-                      {account.active ? "PAUSE" : "ENABLE"}
-                    </Text>
-                  </Pressable>
-                </View>
-              )}
-            </View>
+            <AccountRow
+              account={account}
+              key={account.id}
+              run={run}
+              toolkitName={selected.name}
+            />
           ))}
           <Section label="AVAILABLE IN VOICE">
             <Choice
               active={setting.enabled !== false}
               label={setting.enabled === false ? "DISABLED" : "ENABLED"}
-              onPress={() => void save({ enabled: setting.enabled === false })}
+              onPress={toggleEnabled}
             />
           </Section>
           <Section label="CHANGES">
@@ -371,7 +388,7 @@ function ToolManager(props: {
                   (setting.approvalPolicy ?? props.approvalPolicy) === "ask"
                 }
                 label="ASK ME"
-                onPress={() => void save({ approvalPolicy: "ask" })}
+                onPress={requireApproval}
               />
               <Choice
                 active={
@@ -379,7 +396,7 @@ function ToolManager(props: {
                   "automatic"
                 }
                 label="ALLOW"
-                onPress={() => void save({ approvalPolicy: "automatic" })}
+                onPress={allowChanges}
               />
             </View>
           </Section>
@@ -392,29 +409,14 @@ function ToolManager(props: {
               <ActivityIndicator color="#e8ff58" style={styles.loader} />
             ) : (
               tools.map((tool) => (
-                <Pressable
+                <ToolRow
+                  disabled={disabled.has(tool.slug)}
+                  disabledTools={disabled}
                   key={tool.slug}
-                  onPress={() => {
-                    const next = new Set(disabled);
-                    if (next.has(tool.slug)) next.delete(tool.slug);
-                    else next.add(tool.slug);
-                    void save({ disabledTools: [...next] });
-                  }}
-                  style={styles.toolRow}
-                >
-                  <View
-                    style={[
-                      styles.check,
-                      !disabled.has(tool.slug) && styles.checkActive,
-                    ]}
-                  />
-                  <View style={styles.toolCopy}>
-                    <Text style={styles.toolName}>{humanize(tool.slug)}</Text>
-                    <Text numberOfLines={2} style={styles.toolDescription}>
-                      {tool.description}
-                    </Text>
-                  </View>
-                </Pressable>
+                  onError={props.setError}
+                  save={save}
+                  tool={tool}
+                />
               ))
             )}
           </Section>
@@ -427,22 +429,12 @@ function ToolManager(props: {
               <Choice
                 active={props.approvalPolicy === "ask"}
                 label="ASK ME"
-                onPress={() =>
-                  void run(async () => {
-                    const result = await setToolApprovalPolicy("ask");
-                    props.setApprovalPolicy(result.approvalPolicy);
-                  })
-                }
+                onPress={requireDefaultApproval}
               />
               <Choice
                 active={props.approvalPolicy === "automatic"}
                 label="ALLOW"
-                onPress={() =>
-                  void run(async () => {
-                    const result = await setToolApprovalPolicy("automatic");
-                    props.setApprovalPolicy(result.approvalPolicy);
-                  })
-                }
+                onPress={allowDefaultChanges}
               />
             </View>
           </View>
@@ -456,30 +448,122 @@ function ToolManager(props: {
           />
           <ScrollView contentContainerStyle={styles.catalog}>
             {catalog.map((connection) => (
-              <Pressable
+              <CatalogRow
+                connection={connection}
                 key={connection.slug}
-                onPress={() => void choose(connection)}
-                style={styles.catalogRow}
-              >
-                <View>
-                  <Text style={styles.catalogName}>{connection.name}</Text>
-                  <Text
-                    style={[
-                      styles.catalogStatus,
-                      connection.connected && styles.active,
-                    ]}
-                  >
-                    {connection.connected ? "CONNECTED" : "AVAILABLE"}
-                  </Text>
-                </View>
-                <Text style={styles.arrow}>→</Text>
-              </Pressable>
+                select={choose}
+              />
             ))}
           </ScrollView>
         </>
       )}
       {props.error ? <Text style={styles.error}>{props.error}</Text> : null}
     </View>
+  );
+}
+function AccountRow({
+  account,
+  run,
+  toolkitName,
+}: {
+  account: ToolAccount;
+  run: (action: () => Promise<unknown>) => Promise<void>;
+  toolkitName: string;
+}) {
+  const reconnect = useCallback(
+    () => run(() => updateToolAccount(account.id, "refresh")),
+    [account.id, run]
+  );
+  const toggle = useCallback(
+    () =>
+      run(() =>
+        updateToolAccount(account.id, account.active ? "disable" : "enable")
+      ),
+    [account.active, account.id, run]
+  );
+  return (
+    <View style={styles.account}>
+      <View>
+        <Text style={styles.accountName}>
+          {account.alias || `${toolkitName} account`}
+        </Text>
+        <Text style={[styles.accountStatus, account.active && styles.active]}>
+          {account.status}
+        </Text>
+      </View>
+      {account.status === "INITIATED" ? null : (
+        <View style={styles.rowActions}>
+          {account.active ? null : (
+            <Pressable onPress={reconnect}>
+              <Text style={styles.smallAction}>RECONNECT</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={toggle}>
+            <Text style={styles.smallAction}>
+              {account.active ? "PAUSE" : "ENABLE"}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+function ToolRow({
+  disabled,
+  disabledTools,
+  onError,
+  save,
+  tool,
+}: {
+  disabled: boolean;
+  disabledTools: Set<string>;
+  onError: (value: string | undefined) => void;
+  save: (patch: { disabledTools: string[] }) => Promise<void>;
+  tool: { slug: string; description: string };
+}) {
+  const toggle = useCallback(() => {
+    const next = new Set(disabledTools);
+    if (next.has(tool.slug)) {
+      next.delete(tool.slug);
+    } else {
+      next.add(tool.slug);
+    }
+    return save({ disabledTools: [...next] }).catch((reason) =>
+      onError(message(reason))
+    );
+  }, [disabledTools, onError, save, tool.slug]);
+  return (
+    <Pressable onPress={toggle} style={styles.toolRow}>
+      <View style={[styles.check, !disabled && styles.checkActive]} />
+      <View style={styles.toolCopy}>
+        <Text style={styles.toolName}>{humanize(tool.slug)}</Text>
+        <Text numberOfLines={2} style={styles.toolDescription}>
+          {tool.description}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+function CatalogRow({
+  connection,
+  select,
+}: {
+  connection: ToolConnection;
+  select: (connection: ToolConnection) => Promise<void>;
+}) {
+  const choose = useCallback(() => select(connection), [connection, select]);
+  return (
+    <Pressable onPress={choose} style={styles.catalogRow}>
+      <View>
+        <Text style={styles.catalogName}>{connection.name}</Text>
+        <Text
+          style={[styles.catalogStatus, connection.connected && styles.active]}
+        >
+          {connection.connected ? "CONNECTED" : "AVAILABLE"}
+        </Text>
+      </View>
+      <Text style={styles.arrow}>→</Text>
+    </Pressable>
   );
 }
 function Section({
@@ -503,7 +587,7 @@ function Choice({
 }: {
   active: boolean;
   label: string;
-  onPress(): void;
+  onPress: () => void;
 }) {
   return (
     <Pressable
@@ -524,6 +608,10 @@ const humanize = (value: string) =>
     .replace(firstCharacterPattern, (letter) => letter.toUpperCase());
 const message = (reason: unknown) =>
   reason instanceof Error ? reason.message : "TOOLS_UNAVAILABLE";
+const launchStyle = ({ pressed }: { pressed: boolean }) => [
+  styles.launch,
+  pressed && styles.pressed,
+];
 const acid = "#e8ff58",
   ink = "#f0f1e8",
   base = "#11130e",

@@ -8,6 +8,14 @@ const tokenResponseSchema = z.object({
   scope: z.string().default(""),
   token_type: z.string().default("Bearer"),
 });
+const providerUnavailable = (cause: unknown) =>
+  new ApiError(
+    "PROVIDER_UNAVAILABLE",
+    "The Linear API could not be reached",
+    502,
+    true,
+    { cause }
+  );
 export type LinearTokenResponse = z.infer<typeof tokenResponseSchema>;
 
 export interface LinearOAuthConfig {
@@ -54,11 +62,12 @@ export class LinearApi {
       method: "POST",
       signal,
     });
-    if (!response.ok && response.status !== 401)
+    if (!response.ok && response.status !== 401) {
       throw providerHttpError(
         response.status,
         "Unable to revoke the Linear credential"
       );
+    }
   }
   private async token(
     config: LinearOAuthConfig,
@@ -75,45 +84,44 @@ export class LinearApi {
       method: "POST",
       signal,
     });
-    if (!response.ok)
+    if (!response.ok) {
       throw new ApiError(
         "OAUTH_EXCHANGE_FAILED",
         "Linear rejected the OAuth token request",
         502,
         response.status >= 500
       );
+    }
     return tokenResponseSchema.parse(await response.json());
   }
   private async request(input: string, init: RequestInit): Promise<Response> {
     try {
       return await this.fetcher(input, init);
     } catch (error) {
-      if (init.signal?.aborted) throw error;
-      throw new ApiError(
-        "PROVIDER_UNAVAILABLE",
-        "The Linear API could not be reached",
-        502,
-        true,
-        { cause: error }
-      );
+      if (init.signal?.aborted) {
+        throw error;
+      }
+      throw providerUnavailable(error);
     }
   }
 }
 
 function providerHttpError(status: number, message: string): ApiError {
-  if (status === 401 || status === 403)
+  if (status === 401 || status === 403) {
     return new ApiError(
       "INTEGRATION_AUTH_EXPIRED",
       "The Linear connection has expired",
       401,
       false
     );
-  if (status === 429)
+  }
+  if (status === 429) {
     return new ApiError(
       "PROVIDER_RATE_LIMITED",
       "Linear rate limited the request",
       429,
       true
     );
+  }
   return new ApiError("PROVIDER_UNAVAILABLE", message, 502, status >= 500);
 }

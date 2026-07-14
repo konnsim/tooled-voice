@@ -11,8 +11,11 @@ beforeEach(() => {
   jwtVerify.mockReset();
 });
 afterEach(() => {
-  if (previousUrl === undefined) delete process.env.SUPABASE_URL;
-  else process.env.SUPABASE_URL = previousUrl;
+  if (previousUrl === undefined) {
+    delete process.env.SUPABASE_URL;
+  } else {
+    process.env.SUPABASE_URL = previousUrl;
+  }
 });
 describe("verifyAccessToken", () => {
   it("requires a bearer token", async () => {

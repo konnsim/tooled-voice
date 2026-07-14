@@ -29,7 +29,9 @@ describe("createRealtimeSession", () => {
       sessionId: "sess_1",
     });
     const [call] = fetcher.mock.calls;
-    if (!call) throw new Error("Expected a Realtime session request");
+    if (!call) {
+      throw new Error("Expected a Realtime session request");
+    }
     const [, init] = call;
     const body = JSON.parse(String(init?.body)) as {
       session: {
@@ -73,7 +75,9 @@ describe("createRealtimeSession", () => {
       url: "https://mcp.example/session",
     });
     const [call] = fetcher.mock.calls;
-    if (!call) throw new Error("Expected a Realtime session request");
+    if (!call) {
+      throw new Error("Expected a Realtime session request");
+    }
     const [, init] = call;
     const body = JSON.parse(String(init?.body)) as {
       session: { tools: Record<string, unknown>[] };
@@ -105,7 +109,9 @@ describe("createRealtimeSession", () => {
       url: "https://mcp.example/session",
     });
     const [call] = fetcher.mock.calls;
-    if (!call) throw new Error("Expected a Realtime session request");
+    if (!call) {
+      throw new Error("Expected a Realtime session request");
+    }
     const [, init] = call;
     const body = JSON.parse(String(init?.body)) as {
       session: { tools: Record<string, unknown>[] };

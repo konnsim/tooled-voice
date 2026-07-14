@@ -11,14 +11,19 @@ export async function handleAuthDeepLink(url: string): Promise<void> {
     callback.protocol !== "tooledvoice:" ||
     callback.hostname !== "auth" ||
     callback.pathname !== "/callback"
-  )
+  ) {
     return;
+  }
 
   const errorDescription = callback.searchParams.get("error_description");
-  if (errorDescription) throw new Error(errorDescription);
+  if (errorDescription) {
+    throw new Error(errorDescription);
+  }
 
   const code = callback.searchParams.get("code");
-  if (!code || exchangedCodes.has(code)) return;
+  if (!code || exchangedCodes.has(code)) {
+    return;
+  }
   exchangedCodes.add(code);
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -32,7 +37,7 @@ export function subscribeToAuthDeepLinks(
   onError: (message: string) => void
 ): () => void {
   const open = (url: string) => {
-    void handleAuthDeepLink(url).catch((error) =>
+    handleAuthDeepLink(url).catch((error) =>
       onError(
         error instanceof Error
           ? error.message
@@ -40,9 +45,11 @@ export function subscribeToAuthDeepLinks(
       )
     );
   };
-  void Linking.getInitialURL()
+  Linking.getInitialURL()
     .then((url) => {
-      if (url) open(url);
+      if (url) {
+        open(url);
+      }
     })
     .catch((error) =>
       onError(

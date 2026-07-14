@@ -83,5 +83,7 @@ export function stopAudioSession() {
   try {
     InCallManager.setKeepScreenOn(false);
     InCallManager.stop();
-  } catch {}
+  } catch {
+    // Native audio teardown is best-effort during disconnect.
+  }
 }

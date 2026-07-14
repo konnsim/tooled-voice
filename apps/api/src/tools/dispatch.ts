@@ -10,6 +10,105 @@ import { ApiError, normalizeError } from "../errors/api-error.js";
 import type { ToolExecutionContext } from "./define-tool.js";
 import { toolRegistry } from "./registry.js";
 
+async function replayedToolCall(
+  request: ToolCallRequest,
+  context: ToolExecutionContext,
+  logContext: Record<string, unknown>
+): Promise<ToolResponse | undefined> {
+  const [previous] = await context.database
+    .select()
+    .from(toolExecutions)
+    .where(
+      and(
+        eq(toolExecutions.userId, context.user.id),
+        eq(toolExecutions.callId, request.callId)
+      )
+    )
+    .limit(1);
+  if (!previous) {
+    return;
+  }
+  if (previous.status === "succeeded") {
+    context.logger.info(
+      { ...logContext, status: "cached" },
+      "Tool call replayed"
+    );
+    return { callId: request.callId, ok: true, result: previous.result };
+  }
+  if (previous.status === "running") {
+    context.logger.info(
+      { ...logContext, status: "in_progress" },
+      "Tool call rejected"
+    );
+    return failure(
+      request.callId,
+      new ApiError(
+        "TOOL_IN_PROGRESS",
+        "This tool call is already being processed",
+        409,
+        true
+      )
+    );
+  }
+  context.logger.info(
+    {
+      ...logContext,
+      errorCode: previous.errorCode,
+      status: "previously_failed",
+    },
+    "Tool call replayed"
+  );
+  return {
+    callId: request.callId,
+    error: {
+      code: previous.errorCode ?? "TOOL_EXECUTION_FAILED",
+      message: "This tool call previously failed",
+      retryable: previous.retryable ?? false,
+    },
+    ok: false,
+  };
+}
+async function validateConversation(
+  conversationId: string | undefined,
+  context: ToolExecutionContext,
+  logContext: Record<string, unknown>,
+  callId: string
+): Promise<ToolResponse | undefined> {
+  if (!conversationId) {
+    return;
+  }
+  const [owned] = await context.database
+    .select({
+      id: conversations.id,
+      realtimeSessionId: conversations.realtimeSessionId,
+    })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.id, conversationId),
+        eq(conversations.userId, context.user.id)
+      )
+    )
+    .limit(1);
+  if (!owned) {
+    context.logger.info(
+      { ...logContext, errorCode: "INVALID_REQUEST", status: "rejected" },
+      "Tool call rejected"
+    );
+    return failure(
+      callId,
+      new ApiError(
+        "INVALID_REQUEST",
+        "The conversation was not found",
+        400,
+        false
+      )
+    );
+  }
+  if (owned.realtimeSessionId) {
+    logContext.realtimeSessionId = owned.realtimeSessionId;
+  }
+}
 export async function dispatchTool(
   request: ToolCallRequest,
   context: ToolExecutionContext
@@ -30,57 +129,9 @@ export async function dispatchTool(
       ? Object.keys(request.arguments).sort()
       : [];
   context.logger.info({ ...logContext, argumentKeys }, "Tool call received");
-  const existing = await context.database
-    .select()
-    .from(toolExecutions)
-    .where(
-      and(
-        eq(toolExecutions.userId, context.user.id),
-        eq(toolExecutions.callId, request.callId)
-      )
-    )
-    .limit(1);
-  const [previous] = existing;
-  if (previous?.status === "succeeded") {
-    context.logger.info(
-      { ...logContext, status: "cached" },
-      "Tool call replayed"
-    );
-    return { callId: request.callId, ok: true, result: previous.result };
-  }
-  if (previous?.status === "running") {
-    context.logger.info(
-      { ...logContext, status: "in_progress" },
-      "Tool call rejected"
-    );
-    return failure(
-      request.callId,
-      new ApiError(
-        "TOOL_IN_PROGRESS",
-        "This tool call is already being processed",
-        409,
-        true
-      )
-    );
-  }
-  if (previous) {
-    context.logger.info(
-      {
-        ...logContext,
-        errorCode: previous.errorCode,
-        status: "previously_failed",
-      },
-      "Tool call replayed"
-    );
-    return {
-      callId: request.callId,
-      error: {
-        code: previous.errorCode ?? "TOOL_EXECUTION_FAILED",
-        message: "This tool call previously failed",
-        retryable: previous.retryable ?? false,
-      },
-      ok: false,
-    };
+  const replayed = await replayedToolCall(request, context, logContext);
+  if (replayed) {
+    return replayed;
   }
   const tool = toolRegistry.get(request.tool);
   if (!tool) {
@@ -93,21 +144,23 @@ export async function dispatchTool(
       new ApiError("UNKNOWN_TOOL", "The requested tool does not exist", 404)
     );
   }
-  for (const permission of tool.permissions)
-    if (!context.user.permissions.has(permission)) {
-      context.logger.info(
-        { ...logContext, errorCode: "PERMISSION_DENIED", status: "rejected" },
-        "Tool call rejected"
-      );
-      return failure(
-        request.callId,
-        new ApiError(
-          "PERMISSION_DENIED",
-          "You do not have permission to use this tool",
-          403
-        )
-      );
-    }
+  const missingPermission = tool.permissions.find(
+    (permission) => !context.user.permissions.has(permission)
+  );
+  if (missingPermission) {
+    context.logger.info(
+      { ...logContext, errorCode: "PERMISSION_DENIED", status: "rejected" },
+      "Tool call rejected"
+    );
+    return failure(
+      request.callId,
+      new ApiError(
+        "PERMISSION_DENIED",
+        "You do not have permission to use this tool",
+        403
+      )
+    );
+  }
   const parsed = tool.input.safeParse(request.arguments);
   if (!parsed.success) {
     context.logger.info(
@@ -127,37 +180,14 @@ export async function dispatchTool(
       )
     );
   }
-  if (request.conversationId) {
-    const [owned] = await context.database
-      .select({
-        id: conversations.id,
-        realtimeSessionId: conversations.realtimeSessionId,
-      })
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.id, request.conversationId),
-          eq(conversations.userId, context.user.id)
-        )
-      )
-      .limit(1);
-    if (!owned) {
-      context.logger.info(
-        { ...logContext, errorCode: "INVALID_REQUEST", status: "rejected" },
-        "Tool call rejected"
-      );
-      return failure(
-        request.callId,
-        new ApiError(
-          "INVALID_REQUEST",
-          "The conversation was not found",
-          400,
-          false
-        )
-      );
-    }
-    if (owned.realtimeSessionId)
-      logContext.realtimeSessionId = owned.realtimeSessionId;
+  const invalidConversation = await validateConversation(
+    request.conversationId,
+    context,
+    logContext,
+    request.callId
+  );
+  if (invalidConversation) {
+    return invalidConversation;
   }
   await context.database
     .insert(userProfiles)
@@ -211,21 +241,24 @@ export async function dispatchTool(
     );
     return { callId: request.callId, ok: true, result: validated };
   } catch (unknown) {
-    const error = timeout.aborted
-      ? new ApiError(
-          "TOOL_TIMEOUT",
-          "The tool execution timed out",
-          504,
-          tool.retry.enabled
-        )
-      : unknown instanceof z.ZodError
-        ? new ApiError(
-            "TOOL_EXECUTION_FAILED",
-            "The tool returned an invalid result",
-            500,
-            false
-          )
-        : normalizeError(unknown);
+    let error: ApiError;
+    if (timeout.aborted) {
+      error = new ApiError(
+        "TOOL_TIMEOUT",
+        "The tool execution timed out",
+        504,
+        tool.retry.enabled
+      );
+    } else if (unknown instanceof z.ZodError) {
+      error = new ApiError(
+        "TOOL_EXECUTION_FAILED",
+        "The tool returned an invalid result",
+        500,
+        false
+      );
+    } else {
+      error = normalizeError(unknown);
+    }
     await context.database
       .update(toolExecutions)
       .set({

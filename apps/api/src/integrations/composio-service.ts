@@ -41,12 +41,13 @@ export class ComposioService {
     userId: string,
     signal: AbortSignal
   ): Promise<ComposioConnection[]> {
-    if (!this.client)
+    if (!this.client) {
       return composioToolkits.map((slug) => ({
         connected: false,
         name: toolkitName(slug),
         slug,
       }));
+    }
     signal.throwIfAborted();
     const session = await this.client.sessions.create(userId, {
       toolkits: [...composioToolkits],
@@ -70,11 +71,12 @@ export class ComposioService {
     cursor: string | undefined,
     signal: AbortSignal
   ) {
-    if (!this.client)
+    if (!this.client) {
       return {
         cursor: undefined,
         items: await this.connections(userId, signal),
       };
+    }
     signal.throwIfAborted();
     const session = await this.client.sessions.create(userId, {});
     const result = await session.toolkits({
@@ -93,7 +95,9 @@ export class ComposioService {
     };
   }
   async accounts(userId: string, signal: AbortSignal) {
-    if (!this.client) return [];
+    if (!this.client) {
+      return [];
+    }
     const result = await this.client.connectedAccounts.list(
       { limit: 100, orderBy: "updated_at", userIds: [userId] },
       { signal }
@@ -143,13 +147,14 @@ export class ComposioService {
       alias: `${toolkit}-${Date.now()}`,
       callbackUrl,
     });
-    if (!connection.redirectUrl)
+    if (!connection.redirectUrl) {
       throw new ApiError(
         "INTEGRATION_UNAVAILABLE",
         `${toolkitName(toolkit)} did not return a connection link`,
         502,
         false
       );
+    }
     return {
       authorizationUrl: connection.redirectUrl,
       connectionId: connection.id,
@@ -167,7 +172,9 @@ export class ComposioService {
     });
     const result = await session.toolkits({ toolkits: [toolkit] });
     const id = result.items[0]?.connection?.connectedAccount?.id;
-    if (!id) return;
+    if (!id) {
+      return;
+    }
     await client.connectedAccounts.disable(id);
   }
   async setAccountState(
@@ -181,24 +188,30 @@ export class ComposioService {
       { limit: 100, userIds: [userId] },
       { signal }
     );
-    if (!owned.items.some((account) => account.id === accountId))
+    if (!owned.items.some((account) => account.id === accountId)) {
       throw new ApiError(
         "PERMISSION_DENIED",
         "That connection does not belong to this user",
         403,
         false
       );
-    if (action === "enable") await client.connectedAccounts.enable(accountId);
-    else if (action === "refresh")
+    }
+    if (action === "enable") {
+      await client.connectedAccounts.enable(accountId);
+    } else if (action === "refresh") {
       await client.connectedAccounts.refresh(accountId);
-    else await client.connectedAccounts.disable(accountId);
+    } else {
+      await client.connectedAccounts.disable(accountId);
+    }
   }
   async mcp(
     userId: string,
     signal: AbortSignal,
     settings: ToolSettings = {}
   ): Promise<{ url: string; authorization: string } | null> {
-    if (!(this.client && this.apiKey)) return null;
+    if (!(this.client && this.apiKey)) {
+      return null;
+    }
     signal.throwIfAborted();
     const configured = Object.entries(settings).filter(
       ([, value]) => value.enabled !== false
@@ -233,13 +246,14 @@ export class ComposioService {
     return { authorization: this.apiKey, url: url.toString() };
   }
   private required() {
-    if (!this.client)
+    if (!this.client) {
       throw new ApiError(
         "INTEGRATION_UNAVAILABLE",
         "Composio is not configured",
         503,
         false
       );
+    }
     return this.client;
   }
 }

@@ -6,7 +6,9 @@ const required = (
     | "EXPO_PUBLIC_API_URL"
 ) => {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is required`);
+  if (!value) {
+    throw new Error(`${name} is required`);
+  }
   return name === "EXPO_PUBLIC_API_URL"
     ? value.replace(trailingSlashPattern, "")
     : value;

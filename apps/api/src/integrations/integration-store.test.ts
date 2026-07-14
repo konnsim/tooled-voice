@@ -8,7 +8,7 @@ import {
 
 describe("IntegrationStore", () => {
   it("encrypts the complete Linear credential envelope before persistence and decrypts it on read", async () => {
-    let row: Record<string, any> | undefined;
+    let row: Record<string, unknown> | undefined;
     const database = {
       insert: (table: unknown) => ({
         values: (values: Record<string, unknown>) =>

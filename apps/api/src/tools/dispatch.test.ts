@@ -26,8 +26,9 @@ function context(
       }),
     }),
     update: (table: unknown) => {
-      if (table !== toolExecutions)
+      if (table !== toolExecutions) {
         throw new Error("Expected the tool executions table to be updated");
+      }
       return { set: () => ({ where: async () => undefined }) };
     },
   };

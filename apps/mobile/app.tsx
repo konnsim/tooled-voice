@@ -1,6 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -20,7 +20,10 @@ import {
 } from "./src/auth/deep-link";
 import { supabase } from "./src/auth/supabase";
 import { ToolIntegrationControl } from "./src/integrations/linear-control";
-import { useVoiceSession } from "./src/realtime/use-voice-session";
+import {
+  useVoiceSession,
+  type VoiceSession,
+} from "./src/realtime/use-voice-session";
 
 const labels = {
   authenticating: "AUTHENTICATING",
@@ -34,6 +37,11 @@ const labels = {
   speaking: "SPEAKING",
   thinking: "THINKING",
 } as const;
+const liveLabels: Partial<Record<keyof typeof labels, string>> = {
+  listening: "LISTENING",
+  speaking: "SPEAKING",
+  thinking: "THINKING",
+};
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -46,9 +54,10 @@ function AppContent() {
   const [authError, setAuthError] = useState<string>();
   useEffect(() => {
     const unsubscribeDeepLinks = subscribeToAuthDeepLinks(setAuthError);
-    void supabase.auth
+    supabase.auth
       .getSession()
-      .then(({ data }) => setSession(data.session));
+      .then(({ data }) => setSession(data.session))
+      .catch((error) => setAuthError(String(error)));
     const { data: authSubscription } = supabase.auth.onAuthStateChange(
       (_event, next) => setSession(next)
     );
@@ -57,13 +66,14 @@ function AppContent() {
       authSubscription.subscription.unsubscribe();
     };
   }, []);
-  if (session === undefined)
+  if (session === undefined) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color="#e8ff58" />
         <StatusBar style="light" />
       </View>
     );
+  }
   return session ? (
     <VoiceScreen email={session.user.email ?? "authenticated"} />
   ) : (
@@ -84,7 +94,9 @@ function AuthScreen({
   const passwordInput = useRef<TextInput>(null);
   const scrollView = useRef<ScrollView>(null);
   useEffect(() => {
-    if (initialMessage) setMessage(initialMessage);
+    if (initialMessage) {
+      setMessage(initialMessage);
+    }
   }, [initialMessage]);
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", () =>
@@ -98,26 +110,52 @@ function AuthScreen({
       hide.remove();
     };
   }, []);
-  async function submit(create = false) {
-    Keyboard.dismiss();
-    setBusy(true);
-    setMessage(undefined);
-    const result = create
-      ? await supabase.auth.signUp({
-          email: email.trim(),
-          options: { emailRedirectTo: authCallbackUrl },
-          password,
-        })
-      : await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password,
-        });
-    setBusy(false);
-    if (result.error) setMessage(result.error.message);
-    else if (create && !result.data.session)
-      setMessage("Check your inbox to confirm your account.");
-  }
+  const submit = useCallback(
+    async (create = false) => {
+      Keyboard.dismiss();
+      setBusy(true);
+      setMessage(undefined);
+      const result = create
+        ? await supabase.auth.signUp({
+            email: email.trim(),
+            options: { emailRedirectTo: authCallbackUrl },
+            password,
+          })
+        : await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          });
+      setBusy(false);
+      if (result.error) {
+        setMessage(result.error.message);
+      } else if (create && !result.data.session) {
+        setMessage("Check your inbox to confirm your account.");
+      }
+    },
+    [email, password]
+  );
   const disabled = busy || !email.trim() || password.length < 6;
+  const scrollToFormEnd = useCallback(() => {
+    requestAnimationFrame(() =>
+      scrollView.current?.scrollToEnd({ animated: true })
+    );
+  }, []);
+  const focusPassword = useCallback(() => passwordInput.current?.focus(), []);
+  const submitPassword = useCallback(() => {
+    if (!disabled) {
+      submit().catch((error) => setMessage(String(error)));
+    }
+  }, [disabled, submit]);
+  const signIn = useCallback(() => submit(), [submit]);
+  const createAccount = useCallback(() => submit(true), [submit]);
+  const primaryButtonStyle = useCallback(
+    ({ pressed }: { pressed: boolean }) => [
+      styles.primary,
+      disabled && styles.primaryDisabled,
+      pressed && !disabled && styles.pressed,
+    ],
+    [disabled]
+  );
   return (
     <SafeAreaView
       edges={["top", "right", "bottom", "left"]}
@@ -167,12 +205,8 @@ function AuthScreen({
               blurOnSubmit={false}
               keyboardType="email-address"
               onChangeText={setEmail}
-              onFocus={() =>
-                requestAnimationFrame(() =>
-                  scrollView.current?.scrollToEnd({ animated: true })
-                )
-              }
-              onSubmitEditing={() => passwordInput.current?.focus()}
+              onFocus={scrollToFormEnd}
+              onSubmitEditing={focusPassword}
               placeholder="EMAIL"
               placeholderTextColor="#77796e"
               returnKeyType="next"
@@ -184,14 +218,8 @@ function AuthScreen({
               accessibilityLabel="Password"
               autoComplete="password"
               onChangeText={setPassword}
-              onFocus={() =>
-                requestAnimationFrame(() =>
-                  scrollView.current?.scrollToEnd({ animated: true })
-                )
-              }
-              onSubmitEditing={() => {
-                if (!disabled) void submit();
-              }}
+              onFocus={scrollToFormEnd}
+              onSubmitEditing={submitPassword}
               placeholder="PASSWORD"
               placeholderTextColor="#77796e"
               ref={passwordInput}
@@ -214,12 +242,8 @@ function AuthScreen({
               accessibilityLabel="Sign in"
               accessibilityRole="button"
               disabled={disabled}
-              onPress={() => void submit()}
-              style={({ pressed }) => [
-                styles.primary,
-                disabled && styles.primaryDisabled,
-                pressed && !disabled && styles.pressed,
-              ]}
+              onPress={signIn}
+              style={primaryButtonStyle}
             >
               {busy ? (
                 <ActivityIndicator color="#11130e" />
@@ -231,8 +255,8 @@ function AuthScreen({
               accessibilityLabel="Create account"
               accessibilityRole="button"
               disabled={busy || !email.trim() || password.length < 6}
-              onPress={() => void submit(true)}
-              style={({ pressed }) => pressed && styles.pressed}
+              onPress={createAccount}
+              style={pressedStyle}
             >
               <Text style={styles.secondary}>CREATE ACCOUNT</Text>
             </Pressable>
@@ -247,28 +271,42 @@ function VoiceScreen({ email }: { email: string }) {
   const voice = useVoiceSession();
   const history = useRef<ScrollView>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const signOut = useCallback(() => supabase.auth.signOut(), []);
+  const toggleDiagnostics = useCallback(
+    () => setShowDiagnostics((value) => !value),
+    []
+  );
+  const closeDiagnostics = useCallback(() => setShowDiagnostics(false), []);
+  const scrollHistoryToEnd = useCallback(
+    () => history.current?.scrollToEnd({ animated: true }),
+    []
+  );
   const active = ["connected", "listening", "thinking", "speaking"].includes(
     voice.state
   );
   const pending = ["authenticating", "connecting", "reconnecting"].includes(
     voice.state
   );
-  const liveLabel = voice.muted
-    ? "MUTED"
-    : voice.state === "listening"
-      ? "LISTENING"
-      : voice.state === "speaking"
-        ? "SPEAKING"
-        : voice.state === "thinking"
-          ? "THINKING"
-          : "LIVE";
+  const liveLabel = voice.muted ? "MUTED" : (liveLabels[voice.state] ?? "LIVE");
+  let statusColor = "#77796e";
+  if (voice.state === "error") {
+    statusColor = "#ff5d43";
+  } else if (active) {
+    statusColor = "#e8ff58";
+  }
+  let hint = "ONE CONNECTION · CONTINUOUS CONVERSATION";
+  if (active) {
+    hint = voice.muted
+      ? "MICROPHONE OFF · TAP UNMUTE TO CONTINUE"
+      : "LIVE MIC · SPEAK NATURALLY · INTERRUPT ANY TIME";
+  }
   const metric = (event: string) =>
     voice.diagnostics.find((item) => item.event === event)?.elapsedMs;
   const metricValue = (event: string) => {
     const value = metric(event);
     return value === undefined ? "—" : `${value}ms`;
   };
-  const labMetrics = [
+  const labMetrics: [string, string][] = [
     ["CONNECTION", metricValue("channel_open")],
     ["TURN RESPONSE", metricValue("response_created")],
     ["FIRST AUDIO", metricValue("first_audio")],
@@ -290,7 +328,7 @@ function VoiceScreen({ email }: { email: string }) {
           <Text style={styles.eyebrow}>TOOLED / VOICE</Text>
           <Text style={styles.identity}>{email}</Text>
         </View>
-        <Pressable onPress={() => void supabase.auth.signOut()}>
+        <Pressable onPress={signOut}>
           <Text style={styles.signout}>SIGN OUT</Text>
         </Pressable>
       </View>
@@ -299,12 +337,7 @@ function VoiceScreen({ email }: { email: string }) {
           style={[
             styles.dot,
             {
-              backgroundColor:
-                voice.state === "error"
-                  ? "#ff5d43"
-                  : active
-                    ? "#e8ff58"
-                    : "#77796e",
+              backgroundColor: statusColor,
             },
           ]}
         />
@@ -314,75 +347,23 @@ function VoiceScreen({ email }: { email: string }) {
         <Pressable
           accessibilityLabel="Toggle voice diagnostics"
           accessibilityRole="button"
-          onPress={() => setShowDiagnostics((value) => !value)}
+          onPress={toggleDiagnostics}
           style={styles.labButton}
         >
           <Text style={styles.labButtonText}>VOICE LAB</Text>
         </Pressable>
       </View>
-      {showDiagnostics ? (
-        <View style={styles.diagnostics}>
-          <View style={styles.diagnosticsHeader}>
-            <Text style={styles.diagnosticsTitle}>VOICE LAB / LIVE</Text>
-            <Pressable onPress={() => setShowDiagnostics(false)}>
-              <Text style={styles.diagnosticsClose}>CLOSE</Text>
-            </Pressable>
-          </View>
-          <Text style={styles.diagnosticsSummary}>
-            ROUTE {voice.route.toUpperCase()} · VAD{" "}
-            {voice.vadEagerness.toUpperCase()}
-          </Text>
-          <View style={styles.metricGrid}>
-            {labMetrics.map(([label, value]) => (
-              <View key={label} style={styles.metricCell}>
-                <Text style={styles.metricLabel}>{label}</Text>
-                <Text style={styles.metricValue}>{value}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      ) : null}
+      <VoiceDiagnostics
+        close={closeDiagnostics}
+        metrics={labMetrics}
+        show={showDiagnostics}
+        voice={voice}
+      />
       <ToolIntegrationControl />
-      {voice.mcpApproval ? (
-        <View accessibilityLiveRegion="assertive" style={styles.approval}>
-          <Text style={styles.approvalEyebrow}>TOOL ACTION</Text>
-          <Text style={styles.approvalTitle}>
-            {friendlyToolName(voice.mcpApproval.name)}
-          </Text>
-          <Text style={styles.approvalBody}>
-            {summarizeToolArguments(voice.mcpApproval.arguments)}
-          </Text>
-          <View style={styles.approvalActions}>
-            <Pressable
-              accessibilityLabel="Deny tool action"
-              accessibilityRole="button"
-              onPress={voice.rejectMcpAction}
-              style={({ pressed }) => [
-                styles.approvalSecondary,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.approvalSecondaryText}>DENY</Text>
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Allow tool action"
-              accessibilityRole="button"
-              onPress={voice.approveMcpAction}
-              style={({ pressed }) => [
-                styles.approvalPrimary,
-                pressed && styles.pressed,
-              ]}
-            >
-              <Text style={styles.approvalPrimaryText}>ALLOW</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
+      <VoiceApproval voice={voice} />
       <ScrollView
         contentContainerStyle={styles.historyContent}
-        onContentSizeChange={() =>
-          history.current?.scrollToEnd({ animated: true })
-        }
+        onContentSizeChange={scrollHistoryToEnd}
         ref={history}
         style={styles.history}
       >
@@ -418,117 +399,227 @@ function VoiceScreen({ email }: { email: string }) {
         )}
       </ScrollView>
       {voice.error ? <Text style={styles.error}>{voice.error}</Text> : null}
-      <View style={styles.controls}>
-        {active ? (
-          <>
-            <View
-              accessibilityLiveRegion="polite"
-              style={[
-                styles.liveOrb,
-                voice.state === "speaking" && styles.liveOrbSpeaking,
-                voice.muted && styles.liveOrbMuted,
-              ]}
-            >
-              <View
-                style={[styles.liveCore, voice.muted && styles.liveCoreMuted]}
-              >
-                <Text
-                  style={[styles.liveText, voice.muted && styles.liveTextMuted]}
-                >
-                  {liveLabel}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.liveActions}>
-              <Pressable
-                accessibilityLabel={
-                  voice.muted ? "Unmute microphone" : "Mute microphone"
-                }
-                accessibilityRole="button"
-                onPress={voice.toggleMuted}
-                style={({ pressed }) => [
-                  styles.liveAction,
-                  voice.muted && styles.liveActionActive,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.liveActionText,
-                    voice.muted && styles.liveActionTextActive,
-                  ]}
-                >
-                  {voice.muted ? "UNMUTE" : "MUTE"}
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityLabel={
-                  voice.speaker ? "Use earpiece" : "Use speaker"
-                }
-                accessibilityRole="button"
-                onPress={voice.toggleSpeaker}
-                style={({ pressed }) => [
-                  styles.liveAction,
-                  voice.speaker && styles.liveActionActive,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.liveActionText,
-                    voice.speaker && styles.liveActionTextActive,
-                  ]}
-                >
-                  {voice.speaker ? "SPEAKER" : "EARPIECE"}
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityLabel="End live voice session"
-                accessibilityRole="button"
-                onPress={voice.disconnect}
-                style={({ pressed }) => [
-                  styles.liveAction,
-                  styles.endAction,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Text style={styles.endActionText}>END</Text>
-              </Pressable>
-            </View>
-            <Pressable
-              accessibilityLabel="Toggle voice response speed"
-              accessibilityRole="button"
-              onPress={voice.toggleVadEagerness}
-            >
-              <Text style={styles.vadToggle}>
-                TURN SPEED ·{" "}
-                {voice.vadEagerness === "high" ? "FAST" : "NATURAL"}
-              </Text>
-            </Pressable>
-          </>
-        ) : (
-          <Pressable
-            accessibilityLabel="Start live voice"
-            accessibilityRole="button"
-            disabled={pending}
-            onPress={() => void voice.connect()}
-            style={[styles.connect, pending && styles.primaryDisabled]}
-          >
-            <Text style={styles.connectText}>
-              {pending ? "OPENING LIVE LINE…" : "START LIVE VOICE"}
-            </Text>
-          </Pressable>
-        )}
-        <Text style={styles.hint}>
-          {active
-            ? voice.muted
-              ? "MICROPHONE OFF · TAP UNMUTE TO CONTINUE"
-              : "LIVE MIC · SPEAK NATURALLY · INTERRUPT ANY TIME"
-            : "ONE CONNECTION · CONTINUOUS CONVERSATION"}
-        </Text>
-      </View>
+      <VoiceControls
+        active={active}
+        hint={hint}
+        liveLabel={liveLabel}
+        pending={pending}
+        voice={voice}
+      />
     </SafeAreaView>
   );
+}
+
+function VoiceDiagnostics({
+  close,
+  metrics,
+  show,
+  voice,
+}: {
+  close: () => void;
+  metrics: [string, string][];
+  show: boolean;
+  voice: VoiceSession;
+}) {
+  if (!show) {
+    return null;
+  }
+  return (
+    <View style={styles.diagnostics}>
+      <View style={styles.diagnosticsHeader}>
+        <Text style={styles.diagnosticsTitle}>VOICE LAB / LIVE</Text>
+        <Pressable onPress={close}>
+          <Text style={styles.diagnosticsClose}>CLOSE</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.diagnosticsSummary}>
+        ROUTE {voice.route.toUpperCase()} · VAD{" "}
+        {voice.vadEagerness.toUpperCase()}
+      </Text>
+      <View style={styles.metricGrid}>
+        {metrics.map(([label, value]) => (
+          <View key={label} style={styles.metricCell}>
+            <Text style={styles.metricLabel}>{label}</Text>
+            <Text style={styles.metricValue}>{value}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+function VoiceApproval({ voice }: { voice: VoiceSession }) {
+  const approval = voice.mcpApproval;
+  if (!approval) {
+    return null;
+  }
+  return (
+    <View accessibilityLiveRegion="assertive" style={styles.approval}>
+      <Text style={styles.approvalEyebrow}>TOOL ACTION</Text>
+      <Text style={styles.approvalTitle}>
+        {friendlyToolName(approval.name)}
+      </Text>
+      <Text style={styles.approvalBody}>
+        {summarizeToolArguments(approval.arguments)}
+      </Text>
+      <View style={styles.approvalActions}>
+        <Pressable
+          accessibilityLabel="Deny tool action"
+          accessibilityRole="button"
+          onPress={voice.rejectMcpAction}
+          style={approvalSecondaryStyle}
+        >
+          <Text style={styles.approvalSecondaryText}>DENY</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="Allow tool action"
+          accessibilityRole="button"
+          onPress={voice.approveMcpAction}
+          style={approvalPrimaryStyle}
+        >
+          <Text style={styles.approvalPrimaryText}>ALLOW</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+function VoiceControls({
+  active,
+  hint,
+  liveLabel,
+  pending,
+  voice,
+}: {
+  active: boolean;
+  hint: string;
+  liveLabel: string;
+  pending: boolean;
+  voice: VoiceSession;
+}) {
+  const mutedActionStyle = useCallback(
+    ({ pressed }: PressState) => [
+      styles.liveAction,
+      voice.muted && styles.liveActionActive,
+      pressed && styles.pressed,
+    ],
+    [voice.muted]
+  );
+  const speakerActionStyle = useCallback(
+    ({ pressed }: PressState) => [
+      styles.liveAction,
+      voice.speaker && styles.liveActionActive,
+      pressed && styles.pressed,
+    ],
+    [voice.speaker]
+  );
+  const connectVoice = useCallback(() => voice.connect(), [voice.connect]);
+  return (
+    <View style={styles.controls}>
+      {active ? (
+        <>
+          <View
+            accessibilityLiveRegion="polite"
+            style={[
+              styles.liveOrb,
+              voice.state === "speaking" && styles.liveOrbSpeaking,
+              voice.muted && styles.liveOrbMuted,
+            ]}
+          >
+            <View
+              style={[styles.liveCore, voice.muted && styles.liveCoreMuted]}
+            >
+              <Text
+                style={[styles.liveText, voice.muted && styles.liveTextMuted]}
+              >
+                {liveLabel}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.liveActions}>
+            <Pressable
+              accessibilityLabel={
+                voice.muted ? "Unmute microphone" : "Mute microphone"
+              }
+              accessibilityRole="button"
+              onPress={voice.toggleMuted}
+              style={mutedActionStyle}
+            >
+              <Text
+                style={[
+                  styles.liveActionText,
+                  voice.muted && styles.liveActionTextActive,
+                ]}
+              >
+                {voice.muted ? "UNMUTE" : "MUTE"}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityLabel={
+                voice.speaker ? "Use earpiece" : "Use speaker"
+              }
+              accessibilityRole="button"
+              onPress={voice.toggleSpeaker}
+              style={speakerActionStyle}
+            >
+              <Text
+                style={[
+                  styles.liveActionText,
+                  voice.speaker && styles.liveActionTextActive,
+                ]}
+              >
+                {voice.speaker ? "SPEAKER" : "EARPIECE"}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityLabel="End live voice session"
+              accessibilityRole="button"
+              onPress={voice.disconnect}
+              style={endActionStyle}
+            >
+              <Text style={styles.endActionText}>END</Text>
+            </Pressable>
+          </View>
+          <Pressable
+            accessibilityLabel="Toggle voice response speed"
+            accessibilityRole="button"
+            onPress={voice.toggleVadEagerness}
+          >
+            <Text style={styles.vadToggle}>
+              TURN SPEED · {voice.vadEagerness === "high" ? "FAST" : "NATURAL"}
+            </Text>
+          </Pressable>
+        </>
+      ) : (
+        <Pressable
+          accessibilityLabel="Start live voice"
+          accessibilityRole="button"
+          disabled={pending}
+          onPress={connectVoice}
+          style={[styles.connect, pending && styles.primaryDisabled]}
+        >
+          <Text style={styles.connectText}>
+            {pending ? "OPENING LIVE LINE…" : "START LIVE VOICE"}
+          </Text>
+        </Pressable>
+      )}
+      <Text style={styles.hint}>{hint}</Text>
+    </View>
+  );
+}
+
+interface PressState {
+  pressed: boolean;
+}
+function pressedStyle({ pressed }: PressState) {
+  return pressed ? styles.pressed : undefined;
+}
+function approvalSecondaryStyle({ pressed }: PressState) {
+  return [styles.approvalSecondary, pressed && styles.pressed];
+}
+function approvalPrimaryStyle({ pressed }: PressState) {
+  return [styles.approvalPrimary, pressed && styles.pressed];
+}
+function endActionStyle({ pressed }: PressState) {
+  return [styles.liveAction, styles.endAction, pressed && styles.pressed];
 }
 
 const ink = "#f0f1e8",

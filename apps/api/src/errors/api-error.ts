@@ -37,7 +37,9 @@ export class ApiError extends Error {
   }
 }
 export function normalizeError(error: unknown): ApiError {
-  if (error instanceof ApiError) return error;
+  if (error instanceof ApiError) {
+    return error;
+  }
   if (isDatabaseError(error)) {
     const state = typeof error.code === "string" ? error.code : "";
     return new ApiError(

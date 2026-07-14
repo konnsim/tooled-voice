@@ -13,75 +13,112 @@ export interface Transcript {
   role: "user" | "assistant";
   text: string;
 }
+export interface VoiceSession {
+  approveMcpAction: () => void;
+  connect: () => Promise<void>;
+  diagnostics: VoiceDiagnostic[];
+  disconnect: () => void;
+  error: string | undefined;
+  history: Transcript[];
+  mcpApproval: McpApproval | null;
+  muted: boolean;
+  rejectMcpAction: () => void;
+  route: AudioRoute;
+  speaker: boolean;
+  state: ConnectionState;
+  toggleMuted: () => void;
+  toggleSpeaker: () => void;
+  toggleVadEagerness: () => void;
+  vadEagerness: "auto" | "high";
+}
 type ClientEvent = Parameters<
   ConstructorParameters<typeof RealtimeClient>[0]
 >[0];
-export function useVoiceSession() {
+const mergeTranscript = (
+  items: Transcript[],
+  transcript: NonNullable<ClientEvent["transcript"]>
+): Transcript[] => {
+  const index = items.findIndex((item) => item.id === transcript.id);
+  if (!transcript.text.trim()) {
+    return transcript.final
+      ? items.filter((item) => item.id !== transcript.id)
+      : items;
+  }
+  const next = {
+    id: transcript.id,
+    role: transcript.role,
+    text: transcript.text,
+  };
+  if (index < 0) {
+    return [...items, next];
+  }
+  return items.map((item, itemIndex) => (itemIndex === index ? next : item));
+};
+const RECONNECTABLE_STATES = new Set<ConnectionState>([
+  "connected",
+  "listening",
+  "thinking",
+  "speaking",
+  "reconnecting",
+]);
+export function useVoiceSession(): VoiceSession {
   const [state, setState] = useState<ConnectionState>("idle");
-  const [muted, setMuted] = useState(false);
-  const [speaker, setSpeaker] = useState(true);
+  const [muted, setMuted] = useState<boolean>(false);
+  const [speaker, setSpeaker] = useState<boolean>(true);
   const [route, setRoute] = useState<AudioRoute>("speaker");
   const [vadEagerness, setVadEagerness] = useState<"auto" | "high">("high");
   const [diagnostics, setDiagnostics] = useState<VoiceDiagnostic[]>([]);
   const [history, setHistory] = useState<Transcript[]>([]);
   const [mcpApproval, setMcpApproval] = useState<McpApproval | null>(null);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<string | undefined>(undefined);
   const listener = useRef<(event: ClientEvent) => void>(() => undefined);
   const client = useRef<RealtimeClient | undefined>(undefined);
   const mounted = useRef(true);
   const shouldReconnect = useRef(false);
   const currentState = useRef<ConnectionState>("idle");
   listener.current = (event: ClientEvent) => {
-    if (!mounted.current) return;
+    if (!mounted.current) {
+      return;
+    }
     if (event.state) {
       currentState.current = event.state;
       setState(event.state);
-      if (
-        [
-          "connected",
-          "listening",
-          "thinking",
-          "speaking",
-          "reconnecting",
-        ].includes(event.state)
-      )
-        shouldReconnect.current = true;
+      shouldReconnect.current ||= RECONNECTABLE_STATES.has(event.state);
     }
-    if (event.muted !== undefined) setMuted(event.muted);
-    if (event.speaker !== undefined) setSpeaker(event.speaker);
-    if (event.route) setRoute(event.route);
+    if (event.muted !== undefined) {
+      setMuted(event.muted);
+    }
+    if (event.speaker !== undefined) {
+      setSpeaker(event.speaker);
+    }
+    if (event.route) {
+      setRoute(event.route);
+    }
     const { diagnostic } = event;
-    if (diagnostic)
+    if (diagnostic) {
       setDiagnostics((items) => [diagnostic, ...items].slice(0, 24));
-    if (event.mcpApproval !== undefined) setMcpApproval(event.mcpApproval);
-    if (event.error) setError(event.error);
+    }
+    if (event.mcpApproval !== undefined) {
+      setMcpApproval(event.mcpApproval);
+    }
+    if (event.error) {
+      setError(event.error);
+    }
     const { transcript } = event;
-    if (transcript)
-      setHistory((items) => {
-        const index = items.findIndex((item) => item.id === transcript.id);
-        if (!transcript.text.trim())
-          return transcript.final
-            ? items.filter((item) => item.id !== transcript.id)
-            : items;
-        const next = {
-          id: transcript.id,
-          role: transcript.role,
-          text: transcript.text,
-        };
-        if (index < 0) return [...items, next];
-        return items.map((item, itemIndex) =>
-          itemIndex === index ? next : item
-        );
-      });
+    if (transcript) {
+      setHistory((items) => mergeTranscript(items, transcript));
+    }
   };
   client.current ??= new RealtimeClient((event) => listener.current(event));
   useEffect(() => {
     mounted.current = true;
     let disposed = false;
-    void getLatestConversation()
+    getLatestConversation()
       .then((latest) => {
-        if (disposed) return;
-        if (latest)
+        if (disposed) {
+          return;
+        }
+        if (latest) {
           setHistory(
             latest.items
               .filter(
@@ -101,8 +138,10 @@ export function useVoiceSession() {
                 text: item.transcript,
               }))
           );
-        if (latest?.status === "active")
+        }
+        if (latest?.status === "active") {
           client.current?.setConversationIfUnset(latest.id);
+        }
       })
       .catch(() => undefined);
     const subscription = AppState.addEventListener("change", (next) => {
@@ -116,13 +155,15 @@ export function useVoiceSession() {
             "speaking",
             "reconnecting",
           ].includes(currentState.current)
-        )
+        ) {
           client.current?.disconnect();
+        }
       } else if (
         shouldReconnect.current &&
         currentState.current === "disconnected"
-      )
-        void client.current?.connect(true);
+      ) {
+        client.current?.connect(true).catch(() => undefined);
+      }
     });
     return () => {
       disposed = true;
@@ -144,11 +185,14 @@ export function useVoiceSession() {
     setHistory([]);
   }, []);
   const approveMcpAction = useCallback(() => {
-    if (mcpApproval) client.current?.respondToMcpApproval(mcpApproval.id, true);
+    if (mcpApproval) {
+      client.current?.respondToMcpApproval(mcpApproval.id, true);
+    }
   }, [mcpApproval]);
   const rejectMcpAction = useCallback(() => {
-    if (mcpApproval)
+    if (mcpApproval) {
       client.current?.respondToMcpApproval(mcpApproval.id, false);
+    }
   }, [mcpApproval]);
   const toggleMuted = useCallback(() => {
     const next = !muted;

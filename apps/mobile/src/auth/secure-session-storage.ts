@@ -4,7 +4,9 @@ const CHUNK = 1800;
 export const secureSessionStorage = {
   async getItem(key: string) {
     const count = Number((await getItemAsync(`${key}.count`)) ?? 0);
-    if (!count) return null;
+    if (!count) {
+      return null;
+    }
     const chunks = await Promise.all(
       Array.from({ length: count }, (_, i) => getItemAsync(`${key}.${i}`))
     );

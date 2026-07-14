@@ -24,18 +24,13 @@ describe("LinearService OAuth", () => {
     const database = {
       delete: () => ({ where: async () => undefined }),
       insert: (_table: unknown) => ({
-        values: (values: Record<string, unknown>) => ({
-          onConflictDoNothing: async () => undefined,
-          then: undefined,
-          ...(values.provider === "linear"
-            ? {
-                then: (resolve: (value: unknown) => void) => {
-                  stateRow = values;
-                  resolve(undefined);
-                },
-              }
-            : {}),
-        }),
+        values: (values: Record<string, unknown>) => {
+          if (values.provider === "linear") {
+            stateRow = values;
+            return Promise.resolve();
+          }
+          return { onConflictDoNothing: async () => undefined };
+        },
       }),
     };
     const service = new LinearService(
@@ -48,7 +43,9 @@ describe("LinearService OAuth", () => {
     );
     const url = new URL(authorizationUrl);
     const state = url.searchParams.get("state");
-    if (!state) throw new Error("Expected an OAuth state parameter");
+    if (!state) {
+      throw new Error("Expected an OAuth state parameter");
+    }
     expect(stateRow?.stateHash).toBe(
       createHash("sha256").update(state).digest("hex")
     );

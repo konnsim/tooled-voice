@@ -12,7 +12,9 @@ export class ApiClientError extends Error {
 }
 async function token() {
   const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) throw new Error("AUTH_REQUIRED");
+  if (error || !data.session) {
+    throw new Error("AUTH_REQUIRED");
+  }
   return data.session.access_token;
 }
 export async function apiFetch(path: string, init: RequestInit = {}) {
@@ -81,7 +83,9 @@ export async function getLatestConversation() {
     }>;
   };
   const [latest] = data.conversations;
-  if (!latest) return null;
+  if (!latest) {
+    return null;
+  }
   const history = (await apiFetch(`/api/conversations/${latest.id}/items`)) as {
     items: Array<{
       id: string;

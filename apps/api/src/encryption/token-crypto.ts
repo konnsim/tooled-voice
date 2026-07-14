@@ -9,13 +9,15 @@ const encryptedSchema = z.object({
 });
 export type EncryptedValue = z.infer<typeof encryptedSchema>;
 export interface Keyring {
-  current(): { version: string; key: Buffer };
-  get(version: string): Buffer | undefined;
+  current: () => { version: string; key: Buffer };
+  get: (version: string) => Buffer | undefined;
 }
 export function createEnvironmentKeyring(): Keyring {
   const version = process.env.TOKEN_ENCRYPTION_KEY_VERSION ?? "v1";
   const encoded = process.env.TOKEN_ENCRYPTION_KEY;
-  if (!encoded) throw new Error("TOKEN_ENCRYPTION_KEY is required");
+  if (!encoded) {
+    throw new Error("TOKEN_ENCRYPTION_KEY is required");
+  }
   return createKeyring(
     version,
     encoded,
@@ -34,13 +36,16 @@ export function createKeyring(
   const keys = new Map(
     Object.entries(encodedKeys).map(([version, encoded]) => {
       const key = Buffer.from(encoded, "base64");
-      if (key.length !== 32)
+      if (key.length !== 32) {
         throw new Error(`Encryption key ${version} must decode to 32 bytes`);
+      }
       return [version, key] as const;
     })
   );
   const current = keys.get(currentVersion);
-  if (!current) throw new Error("Current encryption key is unavailable");
+  if (!current) {
+    throw new Error("Current encryption key is unavailable");
+  }
   return {
     current: () => ({ key: current, version: currentVersion }),
     get: (version) => keys.get(version),
@@ -67,7 +72,9 @@ export function encryptToken(
 export function decryptToken(value: EncryptedValue, keyring: Keyring): string {
   const parsed = encryptedSchema.parse(value);
   const key = keyring.get(parsed.keyVersion);
-  if (!key) throw new Error("Unknown encryption key version");
+  if (!key) {
+    throw new Error("Unknown encryption key version");
+  }
   const decipher = createDecipheriv(
     "aes-256-gcm",
     key,
