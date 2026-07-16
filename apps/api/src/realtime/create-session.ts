@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { ApiError } from "../errors/api-error.js";
 import { realtimeTools } from "../tools/registry.js";
+
 export interface RealtimeMcpConnection {
   approvalPolicy: "ask" | "automatic";
   authorization?: string;
   label: string;
   url: string;
 }
+
 const realtimeUnavailable = (cause: unknown) =>
   new ApiError(
     "REALTIME_SESSION_FAILED",
@@ -15,28 +17,35 @@ const realtimeUnavailable = (cause: unknown) =>
     true,
     { cause }
   );
+
 export async function createRealtimeSession(
   userId: string,
   signal: AbortSignal,
   mcpConnection?: RealtimeMcpConnection
 ) {
   const key = process.env.OPENAI_API_KEY;
+
   if (!key) {
     throw new Error("OPENAI_API_KEY is required");
   }
+
   const safety = createHash("sha256")
     .update(`tooled-voice:${userId}`)
     .digest("hex");
+
   const model = process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime-2.1";
   const configuredEagerness = process.env.OPENAI_REALTIME_VAD_EAGERNESS;
+
   const eagerness =
     configuredEagerness === "low" ||
     configuredEagerness === "auto" ||
     configuredEagerness === "high"
       ? configuredEagerness
       : "high";
+
   const instructions =
     "You are the warm, quick personal assistant inside Tooled Voice. Make this feel like a natural live conversation: respond promptly, use contractions, and usually speak in one or two short sentences. Do not repeat the user or narrate your process. Brief natural acknowledgements are welcome when useful, but avoid filler. If interrupted, stop the prior thought and address the new request immediately. Act on requests with the available tools instead of explaining how a developer could implement them. Use connected tools whenever the user asks to find, inspect, create, update, organize, communicate, or otherwise work with their services. Ask only for information genuinely required by the selected tool. Report tool success or failure clearly and briefly.";
+
   const tools = [
     ...realtimeTools,
     ...(mcpConnection
@@ -58,7 +67,9 @@ export async function createRealtimeSession(
         ]
       : []),
   ];
+
   let response: Response;
+
   try {
     response = await fetch(
       "https://api.openai.com/v1/realtime/client_secrets",
@@ -98,6 +109,7 @@ export async function createRealtimeSession(
   } catch (error) {
     throw realtimeUnavailable(error);
   }
+
   if (!response.ok) {
     throw new ApiError(
       "REALTIME_SESSION_FAILED",
@@ -106,11 +118,13 @@ export async function createRealtimeSession(
       response.status >= 500
     );
   }
+
   const data = (await response.json()) as {
     value?: string;
     expires_at?: number;
     session?: { id?: string };
   };
+
   if (!data.value) {
     throw new ApiError(
       "REALTIME_SESSION_FAILED",
@@ -119,6 +133,7 @@ export async function createRealtimeSession(
       false
     );
   }
+
   return {
     clientSecret: data.value,
     expiresAt: data.expires_at,

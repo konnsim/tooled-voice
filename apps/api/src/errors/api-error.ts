@@ -17,12 +17,16 @@ export type ErrorCode =
   | "DATABASE_ERROR"
   | "REALTIME_SESSION_FAILED"
   | "INTERNAL_ERROR";
+
 const retryableDatabaseStatePattern = /^(08|40|53|57P)/;
+
 const databaseCodePattern = /^[0-9A-Z]{5}$/;
+
 export class ApiError extends Error {
   readonly code: ErrorCode;
   readonly retryable: boolean;
   readonly status: number;
+
   constructor(
     code: ErrorCode,
     message: string,
@@ -36,12 +40,15 @@ export class ApiError extends Error {
     this.status = status;
   }
 }
+
 export function normalizeError(error: unknown): ApiError {
   if (error instanceof ApiError) {
     return error;
   }
+
   if (isDatabaseError(error)) {
     const state = typeof error.code === "string" ? error.code : "";
+
     return new ApiError(
       "DATABASE_ERROR",
       "The database request failed",
@@ -50,6 +57,7 @@ export function normalizeError(error: unknown): ApiError {
       { cause: error }
     );
   }
+
   return new ApiError(
     "INTERNAL_ERROR",
     "An unexpected error occurred",
@@ -58,6 +66,7 @@ export function normalizeError(error: unknown): ApiError {
     { cause: error }
   );
 }
+
 function isDatabaseError(
   error: unknown
 ): error is { name?: string; code?: string } {

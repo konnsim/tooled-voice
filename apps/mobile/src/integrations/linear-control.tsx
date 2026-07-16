@@ -26,8 +26,11 @@ import {
 } from "../api/client";
 
 const integrationCallbackUrl = "tooledvoice://integrations/composio";
+
 const toolkitPrefixPattern = /^[A-Z]+_/;
+
 const underscorePattern = /_/g;
+
 const firstCharacterPattern = /^./;
 
 export function ToolIntegrationControl() {
@@ -36,31 +39,41 @@ export function ToolIntegrationControl() {
   const [connections, setConnections] = useState<ToolConnection[]>([]);
   const [accounts, setAccounts] = useState<ToolAccount[]>([]);
   const [settings, setSettings] = useState<ToolSettings>({});
+
   const [approvalPolicy, setApprovalPolicy] =
     useState<ToolApprovalPolicy>("ask");
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [connectionMessage, setConnectionMessage] = useState<string>();
+
   const refresh = useCallback(async () => {
     const state = await getToolConnections();
+
     setConfigured(state.configured);
     setConnections(state.connections);
     setAccounts(state.accounts);
     setSettings(state.settings);
     setApprovalPolicy(state.approvalPolicy);
     setError(undefined);
+
     return state;
   }, []);
+
   useEffect(() => {
     refresh().catch((reason) => setError(message(reason)));
+
     const restoreInitialConnection = async () => {
       try {
         const value = await Linking.getInitialURL();
+
         if (value?.startsWith(integrationCallbackUrl)) {
           setOpen(true);
+
           setConnectionMessage(
             "Connection returned. Refreshing account status…"
           );
+
           await refresh();
           setConnectionMessage("Account status refreshed.");
         }
@@ -68,13 +81,17 @@ export function ToolIntegrationControl() {
         setError(message(reason));
       }
     };
+
     restoreInitialConnection().catch((reason) => setError(message(reason)));
   }, [refresh]);
+
   const connected =
     accounts.filter((account) => account.active).length ||
     connections.filter((connection) => connection.connected).length;
+
   const openManager = useCallback(() => setOpen(true), []);
   const closeManager = useCallback(() => setOpen(false), []);
+
   return (
     <>
       <Pressable
@@ -139,22 +156,29 @@ function ToolManager(props: {
   const [query, setQuery] = useState("");
   const [catalog, setCatalog] = useState<ToolConnection[]>(props.connections);
   const [selected, setSelected] = useState<ToolConnection>();
+
   const [tools, setTools] = useState<
     Array<{ slug: string; description: string }>
   >([]);
+
   const [toolsBusy, setToolsBusy] = useState(false);
+
   useEffect(() => {
     if (!props.configured) {
       setCatalog(props.connections);
+
       return;
     }
+
     const timer = setTimeout(() => {
       searchToolCatalog(query.trim())
         .then((result) => setCatalog(result.items))
         .catch((reason) => props.setError(message(reason)));
     }, 250);
+
     return () => clearTimeout(timer);
   }, [query, props.configured, props.connections, props.setError]);
+
   const selectedAccounts = useMemo(
     () =>
       selected
@@ -165,18 +189,22 @@ function ToolManager(props: {
         : [],
     [props.accounts, selected]
   );
+
   const setting = useMemo(
     () => (selected ? (props.settings[selected.slug] ?? {}) : {}),
     [props.settings, selected]
   );
+
   const disabled = useMemo(
     () => new Set(setting.disabledTools ?? []),
     [setting.disabledTools]
   );
+
   const run = useCallback(
     async (action: () => Promise<unknown>) => {
       props.setBusy(true);
       props.setError(undefined);
+
       try {
         await action();
         await props.onRefresh();
@@ -188,14 +216,17 @@ function ToolManager(props: {
     },
     [props]
   );
+
   const connect = useCallback(
     async (toolkit: string) => {
       props.setBusy(true);
       props.setError(undefined);
       props.setConnectionMessage("Waiting for authentication in your browser…");
+
       try {
         const { authorizationUrl, connectionId } =
           await beginToolConnection(toolkit);
+
         const result = await openAuthSessionAsync(
           authorizationUrl,
           integrationCallbackUrl,
@@ -206,18 +237,23 @@ function ToolManager(props: {
             toolbarColor: base,
           }
         );
+
         props.setConnectionMessage(
           result.type === "success"
             ? "Authentication returned. Checking account status…"
             : "Checking whether the connection completed…"
         );
+
         const state = await props.onRefresh();
+
         const account = connectionId
           ? state.accounts.find((candidate) => candidate.id === connectionId)
           : undefined;
+
         const toolkitConnected = state.connections.some(
           (candidate) => candidate.slug === toolkit && candidate.connected
         );
+
         if (account?.active || (!connectionId && toolkitConnected)) {
           props.setConnectionMessage("Connection complete.");
         } else if (
@@ -245,14 +281,18 @@ function ToolManager(props: {
     },
     [props]
   );
+
   const choose = useCallback(
     async (connection: ToolConnection) => {
       setSelected(connection);
       setTools([]);
+
       if (!props.configured) {
         return;
       }
+
       setToolsBusy(true);
+
       try {
         setTools((await getToolkitTools(connection.slug)).tools);
       } catch (reason) {
@@ -263,11 +303,13 @@ function ToolManager(props: {
     },
     [props.configured, props.setError]
   );
+
   const save = useCallback(
     async (patch: Partial<Required<typeof setting>>) => {
       if (!selected) {
         return;
       }
+
       const next = {
         approvalPolicy:
           patch.approvalPolicy ??
@@ -282,17 +324,22 @@ function ToolManager(props: {
         disabledTools: patch.disabledTools ?? setting.disabledTools ?? [],
         enabled: patch.enabled ?? setting.enabled ?? true,
       };
+
       props.setSettings({ ...props.settings, [selected.slug]: next });
       await run(() => setToolkitPreferences(selected.slug, next));
     },
     [props, run, selected, selectedAccounts, setting]
   );
+
   const activeAccounts = selectedAccounts.filter((account) => account.active);
+
   const pendingAccounts = selectedAccounts.filter(
     (account) => account.status === "INITIATED"
   );
+
   let connectionStatus = "NOT CONNECTED";
   let connectLabel = "CONNECT ACCOUNT";
+
   if (activeAccounts.length) {
     connectionStatus = `${activeAccounts.length} ACCOUNT${activeAccounts.length === 1 ? "" : "S"} LIVE`;
     connectLabel = "ADD ANOTHER ACCOUNT";
@@ -300,39 +347,49 @@ function ToolManager(props: {
     connectionStatus = "CONNECTION PENDING";
     connectLabel = "TRY CONNECTION AGAIN";
   }
+
   const clearSelection = useCallback(() => setSelected(undefined), []);
+
   const connectSelected = useCallback(
     () => (selected ? connect(selected.slug) : Promise.resolve()),
     [connect, selected]
   );
+
   const toggleEnabled = useCallback(
     () => save({ enabled: setting.enabled === false }),
     [save, setting.enabled]
   );
+
   const requireApproval = useCallback(
     () => save({ approvalPolicy: "ask" }),
     [save]
   );
+
   const allowChanges = useCallback(
     () => save({ approvalPolicy: "automatic" }),
     [save]
   );
+
   const setDefaultApproval = useCallback(
     (approvalPolicy: ToolApprovalPolicy) =>
       run(async () => {
         const result = await setToolApprovalPolicy(approvalPolicy);
+
         props.setApprovalPolicy(result.approvalPolicy);
       }),
     [props.setApprovalPolicy, run]
   );
+
   const requireDefaultApproval = useCallback(
     () => setDefaultApproval("ask"),
     [setDefaultApproval]
   );
+
   const allowDefaultChanges = useCallback(
     () => setDefaultApproval("automatic"),
     [setDefaultApproval]
   );
+
   return (
     <View style={styles.screen}>
       <View style={styles.top}>
@@ -461,6 +518,7 @@ function ToolManager(props: {
     </View>
   );
 }
+
 function AccountRow({
   account,
   run,
@@ -474,6 +532,7 @@ function AccountRow({
     () => run(() => updateToolAccount(account.id, "refresh")),
     [account.id, run]
   );
+
   const toggle = useCallback(
     () =>
       run(() =>
@@ -481,6 +540,7 @@ function AccountRow({
       ),
     [account.active, account.id, run]
   );
+
   return (
     <View style={styles.account}>
       <View>
@@ -508,6 +568,7 @@ function AccountRow({
     </View>
   );
 }
+
 function ToolRow({
   disabled,
   disabledTools,
@@ -523,15 +584,18 @@ function ToolRow({
 }) {
   const toggle = useCallback(() => {
     const next = new Set(disabledTools);
+
     if (next.has(tool.slug)) {
       next.delete(tool.slug);
     } else {
       next.add(tool.slug);
     }
+
     return save({ disabledTools: [...next] }).catch((reason) =>
       onError(message(reason))
     );
   }, [disabledTools, onError, save, tool.slug]);
+
   return (
     <Pressable onPress={toggle} style={styles.toolRow}>
       <View style={[styles.check, !disabled && styles.checkActive]} />
@@ -544,6 +608,7 @@ function ToolRow({
     </Pressable>
   );
 }
+
 function CatalogRow({
   connection,
   select,
@@ -552,6 +617,7 @@ function CatalogRow({
   select: (connection: ToolConnection) => Promise<void>;
 }) {
   const choose = useCallback(() => select(connection), [connection, select]);
+
   return (
     <Pressable onPress={choose} style={styles.catalogRow}>
       <View>
@@ -566,6 +632,7 @@ function CatalogRow({
     </Pressable>
   );
 }
+
 function Section({
   label,
   children,
@@ -580,6 +647,7 @@ function Section({
     </View>
   );
 }
+
 function Choice({
   active,
   label,
@@ -600,23 +668,28 @@ function Choice({
     </Pressable>
   );
 }
+
 const humanize = (value: string) =>
   value
     .replace(toolkitPrefixPattern, "")
     .replace(underscorePattern, " ")
     .toLowerCase()
     .replace(firstCharacterPattern, (letter) => letter.toUpperCase());
+
 const message = (reason: unknown) =>
   reason instanceof Error ? reason.message : "TOOLS_UNAVAILABLE";
+
 const launchStyle = ({ pressed }: { pressed: boolean }) => [
   styles.launch,
   pressed && styles.pressed,
 ];
+
 const acid = "#e8ff58",
   ink = "#f0f1e8",
   base = "#11130e",
   muted = "#929488",
   line = "#303229";
+
 const styles = StyleSheet.create({
   account: {
     alignItems: "center",

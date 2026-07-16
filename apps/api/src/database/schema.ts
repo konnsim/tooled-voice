@@ -13,6 +13,7 @@ import {
 
 // Default-deny RLS and the auth.users FK are maintained in custom migrations
 // because the installed Drizzle Kit does not execute pgTable.withRLS.
+
 const timestamps = {
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
@@ -21,22 +22,26 @@ const timestamps = {
     .defaultNow()
     .notNull(),
 };
+
 export const conversationStatus = pgEnum("conversation_status", [
   "active",
   "completed",
   "failed",
 ]);
+
 export const itemRole = pgEnum("conversation_item_role", [
   "user",
   "assistant",
   "tool",
 ]);
+
 export const executionStatus = pgEnum("tool_execution_status", [
   "running",
   "succeeded",
   "failed",
   "timed_out",
 ]);
+
 export const userProfiles = pgTable("user_profiles", {
   displayName: text("display_name"),
   id: uuid("id").primaryKey(),
@@ -44,6 +49,7 @@ export const userProfiles = pgTable("user_profiles", {
   toolSettings: jsonb("tool_settings").default({}).notNull(),
   ...timestamps,
 });
+
 export const conversations = pgTable(
   "conversations",
   {
@@ -57,6 +63,7 @@ export const conversations = pgTable(
   },
   (t) => [index("conversations_user_idx").on(t.userId)]
 );
+
 export const conversationItems = pgTable(
   "conversation_items",
   {
@@ -80,6 +87,7 @@ export const conversationItems = pgTable(
     ),
   ]
 );
+
 export const integrationAccounts = pgTable(
   "integration_accounts",
   {
@@ -99,6 +107,7 @@ export const integrationAccounts = pgTable(
   },
   (t) => [uniqueIndex("integration_user_provider_idx").on(t.userId, t.provider)]
 );
+
 export const integrationOauthStates = pgTable(
   "integration_oauth_states",
   {
@@ -119,6 +128,7 @@ export const integrationOauthStates = pgTable(
     index("integration_oauth_state_user_idx").on(t.userId, t.provider),
   ]
 );
+
 export const toolExecutions = pgTable(
   "tool_executions",
   {

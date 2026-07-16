@@ -15,7 +15,9 @@ describe("LinearApi", () => {
         { headers: { "content-type": "application/json" }, status: 200 }
       )
     );
+
     const api = new LinearApi(fetcher as unknown as typeof fetch);
+
     const token = await api.exchangeCode(
       { clientId: "client", clientSecret: "secret" },
       {
@@ -25,18 +27,24 @@ describe("LinearApi", () => {
       },
       AbortSignal.timeout(1000)
     );
+
     expect(token).toMatchObject({
       access_token: "access",
       refresh_token: "refresh",
     });
+
     const [call] = fetcher.mock.calls;
+
     if (!call) {
       throw new Error("Expected Linear to make a token request");
     }
+
     const [, init] = call;
+
     expect(String(init?.body)).toContain("code_verifier=verifier");
     expect(String(init?.body)).toContain("client_secret=secret");
   });
+
   it("normalizes OAuth network failures as retryable", async () => {
     const api = new LinearApi(
       vi
@@ -45,6 +53,7 @@ describe("LinearApi", () => {
           new TypeError("socket details")
         ) as unknown as typeof fetch
     );
+
     await expect(
       api.exchangeCode(
         { clientId: "client", clientSecret: "secret" },

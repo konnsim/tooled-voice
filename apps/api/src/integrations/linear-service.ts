@@ -18,16 +18,22 @@ import {
 } from "./linear-api.js";
 
 const provider = "linear";
+
 const stateLifetimeMs = 10 * 60 * 1000;
+
 const refreshLeewayMs = 2 * 60 * 1000;
+
 const scopeSeparatorPattern = /[ ,]+/;
+
 const refreshes = new Map<string, Promise<LinearCredentials>>();
+
 export type LinearApprovalPolicy = "ask" | "automatic";
 
 export class LinearService {
   private readonly api: LinearApi;
   private readonly database: Database;
   private readonly store: IntegrationStore;
+
   constructor(
     database: Database,
     api = new LinearApi(),
@@ -37,6 +43,7 @@ export class LinearService {
     this.database = database;
     this.store = store ?? new IntegrationStore(database);
   }
+
   async createAuthorization(
     userId: string
   ): Promise<{ authorizationUrl: string }> {
@@ -44,13 +51,16 @@ export class LinearService {
     const redirectUri = linearRedirectUri();
     const state = randomBytes(32).toString("base64url");
     const codeVerifier = randomBytes(48).toString("base64url");
+
     const codeChallenge = createHash("sha256")
       .update(codeVerifier)
       .digest("base64url");
+
     await this.database
       .insert(userProfiles)
       .values({ id: userId })
       .onConflictDoNothing();
+
     await this.database
       .delete(integrationOauthStates)
       .where(
@@ -59,6 +69,7 @@ export class LinearService {
           eq(integrationOauthStates.provider, provider)
         )
       );
+
     await this.database.insert(integrationOauthStates).values({
       codeVerifier,
       expiresAt: new Date(Date.now() + stateLifetimeMs),
@@ -67,7 +78,9 @@ export class LinearService {
       stateHash: hashState(state),
       userId,
     });
+
     const url = new URL("https://linear.app/oauth/authorize");
+
     url.search = new URLSearchParams({
       client_id: config.clientId,
       code_challenge: codeChallenge,
@@ -77,8 +90,10 @@ export class LinearService {
       scope: "read,write",
       state,
     }).toString();
+
     return { authorizationUrl: url.toString() };
   }
+
   async completeAuthorization(
     code: string,
     state: string,
@@ -100,6 +115,7 @@ export class LinearService {
         redirectUri: integrationOauthStates.redirectUri,
         userId: integrationOauthStates.userId,
       });
+
     if (!oauthState) {
       throw new ApiError(
         "OAUTH_INVALID_STATE",
@@ -108,6 +124,7 @@ export class LinearService {
         false
       );
     }
+
     const token = await this.api.exchangeCode(
       oauthConfig(),
       {
@@ -117,8 +134,10 @@ export class LinearService {
       },
       signal
     );
+
     await this.store.saveLinear(oauthState.userId, toCredentials(token));
   }
+
   async status(userId: string): Promise<{
     connected: boolean;
     expiresAt?: string;
@@ -139,6 +158,7 @@ export class LinearService {
         )
       )
       .limit(1);
+
     return row
       ? {
           connected: true,
@@ -149,6 +169,7 @@ export class LinearService {
         }
       : { approvalPolicy: "ask", connected: false, scopes: [] };
   }
+
   async setApprovalPolicy(
     userId: string,
     approvalPolicy: LinearApprovalPolicy
@@ -163,6 +184,7 @@ export class LinearService {
         )
       )
       .returning({ id: integrationAccounts.id });
+
     if (!updated) {
       throw new ApiError(
         "INTEGRATION_UNAVAILABLE",
@@ -172,26 +194,33 @@ export class LinearService {
       );
     }
   }
+
   async disconnect(userId: string, signal: AbortSignal): Promise<void> {
     const credentials = await this.store.getLinear(userId);
+
     if (credentials) {
       await this.api
         .revoke(credentials.accessToken, signal)
         .catch(() => undefined);
     }
+
     await this.store.deleteLinear(userId);
   }
+
   async accessToken(
     userId: string,
     signal: AbortSignal
   ): Promise<string | null> {
     const credentials = await this.store.getLinear(userId);
+
     if (!credentials) {
       return null;
     }
+
     return (await this.validCredentials(userId, signal, credentials))
       .accessToken;
   }
+
   async sessionConnection(
     userId: string,
     signal: AbortSignal
@@ -200,12 +229,16 @@ export class LinearService {
     approvalPolicy: LinearApprovalPolicy;
   } | null> {
     const accessToken = await this.accessToken(userId, signal);
+
     if (!accessToken) {
       return null;
     }
+
     const status = await this.status(userId);
+
     return { accessToken, approvalPolicy: status.approvalPolicy };
   }
+
   private validCredentials(
     userId: string,
     signal: AbortSignal,
@@ -217,6 +250,7 @@ export class LinearService {
     ) {
       return Promise.resolve(credentials);
     }
+
     if (!credentials.refreshToken) {
       throw new ApiError(
         "INTEGRATION_AUTH_EXPIRED",
@@ -225,18 +259,24 @@ export class LinearService {
         false
       );
     }
+
     const active = refreshes.get(userId);
+
     if (active) {
       return active;
     }
+
     const refresh = this.api
       .refreshToken(oauthConfig(), credentials.refreshToken, signal)
       .then((token) => {
         const next = toCredentials(token, credentials.refreshToken);
+
         return this.store.saveLinear(userId, next).then(() => next);
       })
       .finally(() => refreshes.delete(userId));
+
     refreshes.set(userId, refresh);
+
     return refresh;
   }
 }
@@ -247,6 +287,7 @@ export const linearMobileRedirectUri = () =>
 function oauthConfig(): LinearOAuthConfig {
   const clientId = process.env.LINEAR_CLIENT_ID;
   const clientSecret = process.env.LINEAR_CLIENT_SECRET;
+
   if (!(clientId && clientSecret)) {
     throw new ApiError(
       "INTEGRATION_UNAVAILABLE",
@@ -255,10 +296,13 @@ function oauthConfig(): LinearOAuthConfig {
       false
     );
   }
+
   return { clientId, clientSecret };
 }
+
 function linearRedirectUri(): string {
   const value = process.env.LINEAR_REDIRECT_URI;
+
   if (!value) {
     throw new ApiError(
       "INTEGRATION_UNAVAILABLE",
@@ -267,11 +311,14 @@ function linearRedirectUri(): string {
       false
     );
   }
+
   return value;
 }
+
 function hashState(state: string) {
   return createHash("sha256").update(state).digest("hex");
 }
+
 function toCredentials(
   token: LinearTokenResponse,
   fallbackRefreshToken?: string

@@ -25,21 +25,26 @@ async function replayedToolCall(
       )
     )
     .limit(1);
+
   if (!previous) {
     return;
   }
+
   if (previous.status === "succeeded") {
     context.logger.info(
       { ...logContext, status: "cached" },
       "Tool call replayed"
     );
+
     return { callId: request.callId, ok: true, result: previous.result };
   }
+
   if (previous.status === "running") {
     context.logger.info(
       { ...logContext, status: "in_progress" },
       "Tool call rejected"
     );
+
     return failure(
       request.callId,
       new ApiError(
@@ -50,6 +55,7 @@ async function replayedToolCall(
       )
     );
   }
+
   context.logger.info(
     {
       ...logContext,
@@ -58,6 +64,7 @@ async function replayedToolCall(
     },
     "Tool call replayed"
   );
+
   return {
     callId: request.callId,
     error: {
@@ -68,6 +75,7 @@ async function replayedToolCall(
     ok: false,
   };
 }
+
 async function validateConversation(
   conversationId: string | undefined,
   context: ToolExecutionContext,
@@ -77,6 +85,7 @@ async function validateConversation(
   if (!conversationId) {
     return;
   }
+
   const [owned] = await context.database
     .select({
       id: conversations.id,
@@ -90,11 +99,13 @@ async function validateConversation(
       )
     )
     .limit(1);
+
   if (!owned) {
     context.logger.info(
       { ...logContext, errorCode: "INVALID_REQUEST", status: "rejected" },
       "Tool call rejected"
     );
+
     return failure(
       callId,
       new ApiError(
@@ -105,10 +116,12 @@ async function validateConversation(
       )
     );
   }
+
   if (owned.realtimeSessionId) {
     logContext.realtimeSessionId = owned.realtimeSessionId;
   }
 }
+
 export async function dispatchTool(
   request: ToolCallRequest,
   context: ToolExecutionContext
@@ -122,36 +135,46 @@ export async function dispatchTool(
       ? { conversationId: request.conversationId }
       : {}),
   };
+
   const argumentKeys =
     request.arguments &&
     typeof request.arguments === "object" &&
     !Array.isArray(request.arguments)
       ? Object.keys(request.arguments).sort()
       : [];
+
   context.logger.info({ ...logContext, argumentKeys }, "Tool call received");
+
   const replayed = await replayedToolCall(request, context, logContext);
+
   if (replayed) {
     return replayed;
   }
+
   const tool = toolRegistry.get(request.tool);
+
   if (!tool) {
     context.logger.info(
       { ...logContext, errorCode: "UNKNOWN_TOOL", status: "rejected" },
       "Tool call rejected"
     );
+
     return failure(
       request.callId,
       new ApiError("UNKNOWN_TOOL", "The requested tool does not exist", 404)
     );
   }
+
   const missingPermission = tool.permissions.find(
     (permission) => !context.user.permissions.has(permission)
   );
+
   if (missingPermission) {
     context.logger.info(
       { ...logContext, errorCode: "PERMISSION_DENIED", status: "rejected" },
       "Tool call rejected"
     );
+
     return failure(
       request.callId,
       new ApiError(
@@ -161,7 +184,9 @@ export async function dispatchTool(
       )
     );
   }
+
   const parsed = tool.input.safeParse(request.arguments);
+
   if (!parsed.success) {
     context.logger.info(
       {
@@ -171,6 +196,7 @@ export async function dispatchTool(
       },
       "Tool call rejected"
     );
+
     return failure(
       request.callId,
       new ApiError(
@@ -180,19 +206,23 @@ export async function dispatchTool(
       )
     );
   }
+
   const invalidConversation = await validateConversation(
     request.conversationId,
     context,
     logContext,
     request.callId
   );
+
   if (invalidConversation) {
     return invalidConversation;
   }
+
   await context.database
     .insert(userProfiles)
     .values({ id: context.user.id })
     .onConflictDoNothing();
+
   const [audit] = await context.database
     .insert(toolExecutions)
     .values({
@@ -205,11 +235,13 @@ export async function dispatchTool(
     })
     .onConflictDoNothing()
     .returning({ id: toolExecutions.id });
+
   if (!audit) {
     context.logger.info(
       { ...logContext, status: "in_progress" },
       "Tool call rejected"
     );
+
     return failure(
       request.callId,
       new ApiError(
@@ -220,12 +252,15 @@ export async function dispatchTool(
       )
     );
   }
+
   const started = Date.now();
   const timeout = AbortSignal.timeout(15_000);
   const signal = AbortSignal.any([context.signal, timeout]);
+
   try {
     const result = await tool.execute(parsed.data, { ...context, signal });
     const validated = tool.output ? tool.output.parse(result) : result;
+
     await context.database
       .update(toolExecutions)
       .set({
@@ -235,13 +270,16 @@ export async function dispatchTool(
         updatedAt: new Date(),
       })
       .where(eq(toolExecutions.id, audit.id));
+
     context.logger.info(
       { ...logContext, durationMs: Date.now() - started, status: "succeeded" },
       "Tool executed"
     );
+
     return { callId: request.callId, ok: true, result: validated };
   } catch (unknown) {
     let error: ApiError;
+
     if (timeout.aborted) {
       error = new ApiError(
         "TOOL_TIMEOUT",
@@ -259,6 +297,7 @@ export async function dispatchTool(
     } else {
       error = normalizeError(unknown);
     }
+
     await context.database
       .update(toolExecutions)
       .set({
@@ -269,6 +308,7 @@ export async function dispatchTool(
         updatedAt: new Date(),
       })
       .where(eq(toolExecutions.id, audit.id));
+
     context.logger.error(
       {
         ...logContext,
@@ -278,9 +318,11 @@ export async function dispatchTool(
       },
       "Tool failed"
     );
+
     return failure(request.callId, error);
   }
 }
+
 const failure = (callId: string, error: ApiError): ToolResponse => ({
   callId,
   error: {

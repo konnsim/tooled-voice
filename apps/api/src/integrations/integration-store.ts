@@ -16,18 +16,22 @@ export const linearCredentialsSchema = z.object({
   scope: z.array(z.string()).default([]),
   tokenType: z.string().default("Bearer"),
 });
+
 export type LinearCredentials = z.infer<typeof linearCredentialsSchema>;
 
 export class IntegrationStore {
   private readonly configuredKeyring: Keyring | undefined;
   private readonly database: Database;
+
   constructor(database: Database, configuredKeyring?: Keyring) {
     this.configuredKeyring = configuredKeyring;
     this.database = database;
   }
+
   private keyring() {
     return this.configuredKeyring ?? createEnvironmentKeyring();
   }
+
   async getLinear(userId: string): Promise<LinearCredentials | null> {
     const [row] = await this.database
       .select()
@@ -39,9 +43,11 @@ export class IntegrationStore {
         )
       )
       .limit(1);
+
     if (!row) {
       return null;
     }
+
     const plaintext = decryptToken(
       {
         ciphertext: row.encryptedCredentials,
@@ -51,18 +57,22 @@ export class IntegrationStore {
       },
       this.keyring()
     );
+
     return linearCredentialsSchema.parse(JSON.parse(plaintext));
   }
+
   async saveLinear(
     userId: string,
     credentials: LinearCredentials
   ): Promise<void> {
     const parsed = linearCredentialsSchema.parse(credentials);
     const encrypted = encryptToken(JSON.stringify(parsed), this.keyring());
+
     await this.database
       .insert(userProfiles)
       .values({ id: userId })
       .onConflictDoNothing();
+
     await this.database
       .insert(integrationAccounts)
       .values({
@@ -88,6 +98,7 @@ export class IntegrationStore {
         target: [integrationAccounts.userId, integrationAccounts.provider],
       });
   }
+
   async deleteLinear(userId: string): Promise<void> {
     await this.database
       .delete(integrationAccounts)

@@ -9,6 +9,7 @@ describe("tool registry", () => {
     expect(realtimeTools).toHaveLength(1);
     expect(realtimeTools[0]?.parameters).toMatchObject({ type: "object" });
   });
+
   it("validates request envelopes and tool arguments", () => {
     expect(
       toolCallRequestSchema.safeParse({
@@ -17,21 +18,26 @@ describe("tool registry", () => {
         tool: "getCurrentTime",
       }).success
     ).toBe(true);
+
     expect(
       getCurrentTime.input.safeParse({ timezone: "Not/AZone" }).success
     ).toBe(false);
   });
+
   it("executes the real timezone tool", async () => {
     const { output } = getCurrentTime;
+
     if (!output) {
       throw new Error("Expected the timezone tool output schema");
     }
+
     const result = output.parse(
       await getCurrentTime.execute(
         { timezone: "Australia/Sydney" },
         {} as never
       )
     );
+
     expect(result).toMatchObject({ timezone: "Australia/Sydney" });
     expect(Date.parse(result.iso)).not.toBeNaN();
   });

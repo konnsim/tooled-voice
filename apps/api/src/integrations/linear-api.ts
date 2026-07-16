@@ -8,6 +8,7 @@ const tokenResponseSchema = z.object({
   scope: z.string().default(""),
   token_type: z.string().default("Bearer"),
 });
+
 const providerUnavailable = (cause: unknown) =>
   new ApiError(
     "PROVIDER_UNAVAILABLE",
@@ -16,6 +17,7 @@ const providerUnavailable = (cause: unknown) =>
     true,
     { cause }
   );
+
 export type LinearTokenResponse = z.infer<typeof tokenResponseSchema>;
 
 export interface LinearOAuthConfig {
@@ -25,9 +27,11 @@ export interface LinearOAuthConfig {
 
 export class LinearApi {
   private readonly fetcher: typeof fetch;
+
   constructor(fetcher: typeof fetch = fetch) {
     this.fetcher = fetcher;
   }
+
   exchangeCode(
     config: LinearOAuthConfig,
     input: { code: string; codeVerifier: string; redirectUri: string },
@@ -44,6 +48,7 @@ export class LinearApi {
       signal
     );
   }
+
   refreshToken(
     config: LinearOAuthConfig,
     refreshToken: string,
@@ -55,6 +60,7 @@ export class LinearApi {
       signal
     );
   }
+
   async revoke(token: string, signal: AbortSignal): Promise<void> {
     const response = await this.request("https://api.linear.app/oauth/revoke", {
       body: new URLSearchParams({ token }),
@@ -62,6 +68,7 @@ export class LinearApi {
       method: "POST",
       signal,
     });
+
     if (!response.ok && response.status !== 401) {
       throw providerHttpError(
         response.status,
@@ -69,6 +76,7 @@ export class LinearApi {
       );
     }
   }
+
   private async token(
     config: LinearOAuthConfig,
     parameters: Record<string, string>,
@@ -84,6 +92,7 @@ export class LinearApi {
       method: "POST",
       signal,
     });
+
     if (!response.ok) {
       throw new ApiError(
         "OAUTH_EXCHANGE_FAILED",
@@ -92,8 +101,10 @@ export class LinearApi {
         response.status >= 500
       );
     }
+
     return tokenResponseSchema.parse(await response.json());
   }
+
   private async request(input: string, init: RequestInit): Promise<Response> {
     try {
       return await this.fetcher(input, init);
@@ -101,6 +112,7 @@ export class LinearApi {
       if (init.signal?.aborted) {
         throw error;
       }
+
       throw providerUnavailable(error);
     }
   }
@@ -115,6 +127,7 @@ function providerHttpError(status: number, message: string): ApiError {
       false
     );
   }
+
   if (status === 429) {
     return new ApiError(
       "PROVIDER_RATE_LIMITED",
@@ -123,5 +136,6 @@ function providerHttpError(status: number, message: string): ApiError {
       true
     );
   }
+
   return new ApiError("PROVIDER_UNAVAILABLE", message, 502, status >= 500);
 }

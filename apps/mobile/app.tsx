@@ -37,11 +37,13 @@ const labels = {
   speaking: "SPEAKING",
   thinking: "THINKING",
 } as const;
+
 const liveLabels: Partial<Record<keyof typeof labels, string>> = {
   listening: "LISTENING",
   speaking: "SPEAKING",
   thinking: "THINKING",
 };
+
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -49,23 +51,29 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
 function AppContent() {
   const [session, setSession] = useState<Session | null>();
   const [authError, setAuthError] = useState<string>();
+
   useEffect(() => {
     const unsubscribeDeepLinks = subscribeToAuthDeepLinks(setAuthError);
+
     supabase.auth
       .getSession()
       .then(({ data }) => setSession(data.session))
       .catch((error) => setAuthError(String(error)));
+
     const { data: authSubscription } = supabase.auth.onAuthStateChange(
       (_event, next) => setSession(next)
     );
+
     return () => {
       unsubscribeDeepLinks();
       authSubscription.subscription.unsubscribe();
     };
   }, []);
+
   if (session === undefined) {
     return (
       <View style={styles.loading}>
@@ -74,6 +82,7 @@ function AppContent() {
       </View>
     );
   }
+
   return session ? (
     <VoiceScreen email={session.user.email ?? "authenticated"} />
   ) : (
@@ -93,28 +102,34 @@ function AuthScreen({
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const passwordInput = useRef<TextInput>(null);
   const scrollView = useRef<ScrollView>(null);
+
   useEffect(() => {
     if (initialMessage) {
       setMessage(initialMessage);
     }
   }, [initialMessage]);
+
   useEffect(() => {
     const show = Keyboard.addListener("keyboardDidShow", () =>
       setKeyboardVisible(true)
     );
+
     const hide = Keyboard.addListener("keyboardDidHide", () =>
       setKeyboardVisible(false)
     );
+
     return () => {
       show.remove();
       hide.remove();
     };
   }, []);
+
   const submit = useCallback(
     async (create = false) => {
       Keyboard.dismiss();
       setBusy(true);
       setMessage(undefined);
+
       const result = create
         ? await supabase.auth.signUp({
             email: email.trim(),
@@ -125,7 +140,9 @@ function AuthScreen({
             email: email.trim(),
             password,
           });
+
       setBusy(false);
+
       if (result.error) {
         setMessage(result.error.message);
       } else if (create && !result.data.session) {
@@ -134,20 +151,26 @@ function AuthScreen({
     },
     [email, password]
   );
+
   const disabled = busy || !email.trim() || password.length < 6;
+
   const scrollToFormEnd = useCallback(() => {
     requestAnimationFrame(() =>
       scrollView.current?.scrollToEnd({ animated: true })
     );
   }, []);
+
   const focusPassword = useCallback(() => passwordInput.current?.focus(), []);
+
   const submitPassword = useCallback(() => {
     if (!disabled) {
       submit().catch((error) => setMessage(String(error)));
     }
   }, [disabled, submit]);
+
   const signIn = useCallback(() => submit(), [submit]);
   const createAccount = useCallback(() => submit(true), [submit]);
+
   const primaryButtonStyle = useCallback(
     ({ pressed }: { pressed: boolean }) => [
       styles.primary,
@@ -156,6 +179,7 @@ function AuthScreen({
     ],
     [disabled]
   );
+
   return (
     <SafeAreaView
       edges={["top", "right", "bottom", "left"]}
@@ -272,40 +296,53 @@ function VoiceScreen({ email }: { email: string }) {
   const history = useRef<ScrollView>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const signOut = useCallback(() => supabase.auth.signOut(), []);
+
   const toggleDiagnostics = useCallback(
     () => setShowDiagnostics((value) => !value),
     []
   );
+
   const closeDiagnostics = useCallback(() => setShowDiagnostics(false), []);
+
   const scrollHistoryToEnd = useCallback(
     () => history.current?.scrollToEnd({ animated: true }),
     []
   );
+
   const active = ["connected", "listening", "thinking", "speaking"].includes(
     voice.state
   );
+
   const pending = ["authenticating", "connecting", "reconnecting"].includes(
     voice.state
   );
+
   const liveLabel = voice.muted ? "MUTED" : (liveLabels[voice.state] ?? "LIVE");
   let statusColor = "#77796e";
+
   if (voice.state === "error") {
     statusColor = "#ff5d43";
   } else if (active) {
     statusColor = "#e8ff58";
   }
+
   let hint = "ONE CONNECTION · CONTINUOUS CONVERSATION";
+
   if (active) {
     hint = voice.muted
       ? "MICROPHONE OFF · TAP UNMUTE TO CONTINUE"
       : "LIVE MIC · SPEAK NATURALLY · INTERRUPT ANY TIME";
   }
+
   const metric = (event: string) =>
     voice.diagnostics.find((item) => item.event === event)?.elapsedMs;
+
   const metricValue = (event: string) => {
     const value = metric(event);
+
     return value === undefined ? "—" : `${value}ms`;
   };
+
   const labMetrics: [string, string][] = [
     ["CONNECTION", metricValue("channel_open")],
     ["TURN RESPONSE", metricValue("response_created")],
@@ -320,6 +357,7 @@ function VoiceScreen({ email }: { email: string }) {
       ),
     ],
   ];
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="light" />
@@ -424,6 +462,7 @@ function VoiceDiagnostics({
   if (!show) {
     return null;
   }
+
   return (
     <View style={styles.diagnostics}>
       <View style={styles.diagnosticsHeader}>
@@ -447,11 +486,14 @@ function VoiceDiagnostics({
     </View>
   );
 }
+
 function VoiceApproval({ voice }: { voice: VoiceSession }) {
   const approval = voice.mcpApproval;
+
   if (!approval) {
     return null;
   }
+
   return (
     <View accessibilityLiveRegion="assertive" style={styles.approval}>
       <Text style={styles.approvalEyebrow}>TOOL ACTION</Text>
@@ -482,6 +524,7 @@ function VoiceApproval({ voice }: { voice: VoiceSession }) {
     </View>
   );
 }
+
 function VoiceControls({
   active,
   hint,
@@ -503,6 +546,7 @@ function VoiceControls({
     ],
     [voice.muted]
   );
+
   const speakerActionStyle = useCallback(
     ({ pressed }: PressState) => [
       styles.liveAction,
@@ -511,7 +555,9 @@ function VoiceControls({
     ],
     [voice.speaker]
   );
+
   const connectVoice = useCallback(() => voice.connect(), [voice.connect]);
+
   return (
     <View style={styles.controls}>
       {active ? (
@@ -609,15 +655,19 @@ function VoiceControls({
 interface PressState {
   pressed: boolean;
 }
+
 function pressedStyle({ pressed }: PressState) {
   return pressed ? styles.pressed : undefined;
 }
+
 function approvalSecondaryStyle({ pressed }: PressState) {
   return [styles.approvalSecondary, pressed && styles.pressed];
 }
+
 function approvalPrimaryStyle({ pressed }: PressState) {
   return [styles.approvalPrimary, pressed && styles.pressed];
 }
+
 function endActionStyle({ pressed }: PressState) {
   return [styles.liveAction, styles.endAction, pressed && styles.pressed];
 }
@@ -626,6 +676,7 @@ const ink = "#f0f1e8",
   base = "#11130e",
   acid = "#e8ff58",
   muted = "#9b9d91";
+
 const styles = StyleSheet.create({
   approval: {
     backgroundColor: "#191b15",
@@ -982,9 +1033,11 @@ function friendlyToolName(name: string) {
     .replace(/_/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
+
 function summarizeToolArguments(raw: string) {
   try {
     const value = JSON.parse(raw) as Record<string, unknown>;
+
     const summary = Object.entries(value)
       .slice(0, 4)
       .map(
@@ -992,6 +1045,7 @@ function summarizeToolArguments(raw: string) {
           `${friendlyToolName(key)}: ${typeof item === "string" ? item : JSON.stringify(item)}`
       )
       .join("\n");
+
     return summary || "Allow this change in your Linear workspace?";
   } catch {
     return "Allow this change in your Linear workspace?";

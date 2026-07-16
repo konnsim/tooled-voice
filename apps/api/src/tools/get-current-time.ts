@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { defineTool } from "./define-tool.js";
+
 export const getCurrentTime = defineTool({
   description: "Get the current date and time in a specified IANA timezone.",
   execute({ timezone }) {
     const now = new Date();
+
     const parts = new Intl.DateTimeFormat("sv-SE", {
       dateStyle: "short",
       hourCycle: "h23",
@@ -12,6 +14,7 @@ export const getCurrentTime = defineTool({
     })
       .format(now)
       .replace(" ", "T");
+
     const offset =
       new Intl.DateTimeFormat("en-US", {
         timeZone: timezone,
@@ -20,6 +23,7 @@ export const getCurrentTime = defineTool({
         .formatToParts(now)
         .find((p) => p.type === "timeZoneName")
         ?.value.replace("GMT", "") || "Z";
+
     return Promise.resolve({
       iso: `${parts}${offset === "Z" ? "Z" : offset}`,
       timezone,
@@ -29,6 +33,7 @@ export const getCurrentTime = defineTool({
     timezone: z.string().refine((v) => {
       try {
         new Intl.DateTimeFormat("en", { timeZone: v }).resolvedOptions();
+
         return true;
       } catch {
         return false;

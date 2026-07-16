@@ -29,9 +29,11 @@ function context(
       if (table !== toolExecutions) {
         throw new Error("Expected the tool executions table to be updated");
       }
+
       return { set: () => ({ where: async () => undefined }) };
     },
   };
+
   return {
     database: database as never,
     logger: { error: vi.fn(), info: vi.fn() },
@@ -50,12 +52,14 @@ describe("dispatchTool", () => {
     callId: "call-1",
     tool: "getCurrentTime",
   } as const;
+
   it("executes a registered local tool", async () => {
     await expect(dispatchTool(request, context())).resolves.toMatchObject({
       ok: true,
       result: { timezone: "Australia/Sydney" },
     });
   });
+
   it("validates permissions and arguments", async () => {
     await expect(
       dispatchTool(request, context({ permissions: [] }))
@@ -63,6 +67,7 @@ describe("dispatchTool", () => {
       error: { code: "PERMISSION_DENIED" },
       ok: false,
     });
+
     await expect(
       dispatchTool(
         { ...request, arguments: { timezone: "invalid" } },
@@ -73,6 +78,7 @@ describe("dispatchTool", () => {
       ok: false,
     });
   });
+
   it("rejects unknown tools", async () => {
     await expect(
       dispatchTool(
@@ -81,6 +87,7 @@ describe("dispatchTool", () => {
       )
     ).resolves.toMatchObject({ error: { code: "UNKNOWN_TOOL" }, ok: false });
   });
+
   it("returns a persisted result for duplicate delivery", async () => {
     await expect(
       dispatchTool(

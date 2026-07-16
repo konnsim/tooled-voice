@@ -7,6 +7,7 @@ describe("normalizeError", () => {
       code: "08006",
       name: "PostgresError",
     });
+
     expect(normalizeError(error)).toMatchObject({
       code: "DATABASE_ERROR",
       message: "The database request failed",

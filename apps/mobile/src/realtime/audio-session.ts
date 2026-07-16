@@ -7,6 +7,7 @@ import {
 import InCallManager from "react-native-incall-manager";
 
 export type AudioRoute = "speaker" | "earpiece" | "external";
+
 export interface AudioSessionEvent {
   detail?: string;
   event: string;
@@ -19,8 +20,10 @@ export async function startAudioSession(
   listener: (event: AudioSessionEvent) => void
 ) {
   stopAudioSession();
+
   if (Platform.OS === "android" && Number(Platform.Version) >= 31) {
     const permission = PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT;
+
     const result = (await PermissionsAndroid.check(permission))
       ? PermissionsAndroid.RESULTS.GRANTED
       : await PermissionsAndroid.request(permission, {
@@ -30,8 +33,10 @@ export async function startAudioSession(
             "Allow Tooled Voice to use connected Bluetooth headsets during live voice.",
           title: "Bluetooth audio",
         });
+
     listener({ detail: result, event: "bluetooth_permission" });
   }
+
   subscriptions = [
     DeviceEventEmitter.addListener(
       "WiredHeadset",
@@ -54,8 +59,10 @@ export async function startAudioSession(
         })
     ),
   ];
+
   InCallManager.start({ auto: true, media: "video" });
   InCallManager.setKeepScreenOn(true);
+
   listener({
     detail: "communication/speaker",
     event: "audio_session_started",
@@ -68,6 +75,7 @@ export function setSpeakerRoute(
   listener: (event: AudioSessionEvent) => void
 ) {
   InCallManager.setForceSpeakerphoneOn(speaker);
+
   listener({
     detail: speaker ? "speaker" : "earpiece",
     event: "audio_route_selected",
@@ -79,7 +87,9 @@ export function stopAudioSession() {
   for (const subscription of subscriptions) {
     subscription.remove();
   }
+
   subscriptions = [];
+
   try {
     InCallManager.setKeepScreenOn(false);
     InCallManager.stop();
