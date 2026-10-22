@@ -161,3 +161,9 @@ Biome's linter will catch most issues automatically. Focus your attention on:
 ---
 
 Most formatting and common issues are automatically fixed by Biome. Run `pnpm fix` before committing to ensure compliance.
+
+## Linear
+Use the global `li` skill (`$li <number>` / `/li <number>`) for issue work.
+- **Team key**: `TOO` (bare numbers mean `TOO-<n>`)
+- **Connector**: `linear-tooled-voice` (`mcp__linear-tooled-voice__*` tools only)
+- **Review state**: `Review`
