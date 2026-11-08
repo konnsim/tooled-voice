@@ -166,4 +166,3 @@ Most formatting and common issues are automatically fixed by Biome. Run `pnpm fi
 Use the global `li` skill (`$li <number>` / `/li <number>`) for issue work.
 - **Team key**: `TOO` (bare numbers mean `TOO-<n>`)
 - **Connector**: `linear-tooled-voice` (`mcp__linear-tooled-voice__*` tools only)
-- **Review state**: `Review`
