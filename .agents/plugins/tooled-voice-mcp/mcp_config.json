@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "linear-tooled-voice": {
+      "url": "https://mcp.linear.app/mcp"
+    },
+    "supabase-tooled-voice": {
+      "url": "https://mcp.supabase.com/mcp?project_ref=lmgpvpjagqszmwiqvlef"
+    }
+  }
+}
